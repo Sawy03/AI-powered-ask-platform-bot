@@ -5,9 +5,6 @@ require('dotenv').config();
 // You'll need to create this file based on your RAG pipeline
 const { getBotResponse } = require('./rag_pipeline');
 
-// Slack tokens
-const SLACK_BOT_TOKEN = "xoxb-122067183344-9335387317857-siGGJrXPWjEnzmys7FagP1HT";
-const SLACK_SIGNING_SECRET = "ee1a8647b61b4a6a918b5a1060c13df8";
 
 // Initialize Slack Bolt app
 const bolt_app = new App({
