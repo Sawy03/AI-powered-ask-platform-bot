@@ -4,3 +4,4 @@ ai_generated_qa_dataset2.csv
 all_documents.csv
 all_documents.txt
 all_documents2.csv
+chroma_langchain_db
