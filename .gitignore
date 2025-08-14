@@ -5,3 +5,5 @@ all_documents.csv
 all_documents.txt
 all_documents2.csv
 chroma_langchain_db
+chroma_langchain_db/chroma.sqlite3
+chroma_langchain_db/170f48d7-98a2-48c6-8281-b1fe04d082e3/length.bin
