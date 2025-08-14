@@ -1,0 +1,18 @@
+Metadata-Version: 2.1
+Name: rag-pipeline
+Version: 0.1.3
+Summary: A library for Retrieval-Augmented Generation with Azure OpenAI
+Home-page: https://github.com/salimkhazem/rag-pipeline
+Author: Salim Khazem
+Author-email: salim.khazem@talan.com
+License: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.7
+License-File: LICENSE
+Requires-Dist: openai
+Requires-Dist: faiss-cpu
+Requires-Dist: numpy
+Requires-Dist: pdfplumber
+

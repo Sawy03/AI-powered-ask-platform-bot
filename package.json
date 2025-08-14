@@ -1,0 +1,30 @@
+{
+  "name": "platform-knowledge-bot",
+  "version": "1.0.0",
+  "description": "Slack bot with RAG pipeline for platform knowledge base",
+  "main": "slack.js",
+  "scripts": {
+    "start": "node slack.js",
+    "dev": "nodemon slack.js",
+    "test": "node test-rag.js"
+  },
+  "dependencies": {
+    "@slack/bolt": "^3.17.1",
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "csv-parser": "^3.0.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "slack",
+    "bot",
+    "rag",
+    "knowledge-base",
+    "ai"
+  ],
+  "author": "Platform Team",
+  "license": "MIT"
+}

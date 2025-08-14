@@ -1,0 +1,1431 @@
+filename,text
+https://incorta.atlassian.net/wiki/spaces/INC/pages/2558853196/Apple+DSAuth,"Apple DSAuth
+Introduction
+Workflow Overview
+Setup instructions
+Prerequisites
+Configuration steps
+Introduction
+This document explains how Incorta integrates with Apple's IDMS to authenticate its users.
+Workflow Overview
+1- User browses to Incorta, typically through a web browser
+2- Incorta looks for an HTTP cookie, with a name configured in the valve configuration, If the cookie is not present OR it does not contain the correct login name as expected, Incorta redirects the user to IDMS for authentication (through the user’s browser)
+3- On IDMS, the user logs in if required, then the user is redirected back to Incorta with the HTTP cookie containing their identity token.
+4- Incorta checks again for the cookie and extracts the user identity token
+5- Incorta sends a validation request to IDMS using a configured validation URL, the validation request contains in its body the identity token (not performed through the user’s browser)
+6- IDMS replies back if the token is valid or not, if the token is valid, the user gets logged into Incorta normally. If not, the user is redirected back to IDMS.
+Note:
+DSAuth valve does not contain any Apple-specific logic, all Apple-specific URLs are configured in the Valve settings when defining the valve in the server.xml file
+Setup instructions
+Prerequisites
+Make sure apple-dsauth.jar is under runtime/lib directory and incorta-sso.jar, incorta-onlogin-valv.jar are removed.
+Configuration steps
+1- Make sure that SSO is enabled for your desired tenant from CMC as below
+2- Update the server.xml for the analytics service with the following Valve tag and its attributes
+<Valve LoggingEnabled=""true""
+appAdminPassword=""xxxappAdminPassword""
+appId=""xxxId""
+appIdKey=""xxxKey""
+className=""com.incorta.sso.valves.DSAuth""
+logoutURL=""http://ds.incorta.com:8080/incorta.simulators/dsauth/signin""
+myacinfo=""myacinfo""
+redirectUrl=""http://ds.incorta.com:8080/incorta.simulators/dsauth/signin""
+userLoginKey=""userName""
+validateUrl=""http://ds.incorta.com:8080/incorta.simulators/dsauth/validate""/>
+3- restart the analytics service for the configuration to take effect"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/795574281/Auth0+Integration,"Auth0 Integration
+Overview:
+This is an overview of the high-level flow for authenticating Incorta users using Auth0 as an authentication / Identity provider.
+There are two main flows which are discussed below in detail:
+A user with a valid JWT token.
+A user with no or invalid JWT token.
+A user with a valid JWT token:
+Incorta intercepts the request and checks for a specific cookie that contains the JWT token.
+The token is decoded and validated based on the below criteria:
+Its the issuer, Incorta will be configured to be aware of Auth0 as a valid issuer, maybe we could add a special signature to add extra security.
+It's an expiry date, in case the token is expired the user will be redirected to Auth0 to be re-authenticated.
+The presence of a pre-configured claim i.e. a user id, user email.
+If all the required criteria are present the user is granted access to Incorta.
+A user with no or invalid JWT token:
+In this case, Incorta intercepted the request coming to Incorta and couldn't find a cookie containing the JWT token or the JWT token was invalid.
+The user is redirected to Auth0 in order to be authenticated and grant Incorta as application access to a subset of the user's personal information.
+Auth0 redirects the user back to an intermediate URL with specific values (code and state) the will be used in a later request by Incorta to Auth0 to get a new JWT token.
+The new JWT token is stored in a cookie to be used for later requests to Incorta."
+https://incorta.atlassian.net/wiki/spaces/INC/pages/3930095631/Auth0+SAML+Provider,"Auth0 SAML Provider
+1- Login at Auth0
+2- Go to Applications → Applications → Create Application → Regular Web App
+3- Scroll to the top and select the Addons tab.
+4- Enable the SAML2 Web App toggle.
+5- On the Settings tab, enter the Application Callback URL to your Incorta URL followed by !<tenant_name>
+Example: http://localhost:8080/incorta/!demo/
+Then click Enable
+6- Go to Action → Library → Create Action → Build from scratch
+Trigger: Login / Post Login
+Runtime: Node 18 (as Recommended)
+7- Set the following code and click → Deploy
+exports.onExecutePostLogin = async (event, api) => {
+api.samlResponse.setAttribute('loginName', event.user.email || null);
+api.samlResponse.setMapUnknownClaimsAsIs(true);
+};
+8- Go to Action → Flows → Login → Add Action → custom 
+and select your custom action, Drag and Drop it as follows
+then click → Apply
+9- Go to Applications → Applications → select your app → Settings → Scroll down to Advanced Settings and select the Endpoints tab. Copy the SAML Metadata URL and Download the metadata from this URL.
+
+10- Map the metadata XML to our Incorta SAML2 configuration
+onelogin.saml2.strict= false
+onelogin.saml2.sp.entityid=urn:incorta-test.us.auth0.com
+onelogin.saml2.sp.assertion_consumer_service.url=https://hz-incorta.uswest.cloudstaging.incortalabs.com/incorta/!default/
+onelogin.saml2.sp.single_logout_service.url= https://hz-incorta.uswest.cloudstaging.incortalabs.com/incorta/!default/
+onelogin.saml2.idp.entityid=urn:incorta-test.us.auth0.com
+onelogin.saml2.idp.single_sign_on_service.url=https://incorta-test.us.auth0.com/samlp/UOkG19jIqQoA3XF3HoTOjWhhuevvgbY9
+onelogin.saml2.idp.single_logout_service.url=https://incorta-test.us.auth0.com/samlp/UOkG19jIqQoA3XF3HoTOjWhhuevvgbY9
+onelogin.saml2.idp.x509cert=MIIDDTCCAfWgAwIBAgIJWE1UYEvfLGbUMA0GCSqGSIb3DQEBCwUAMCQxIjAgBgNVBAMTGWluY29ydGEtdGVzdC51cy5hdXRoMC5jb20wHhcNMjIwNjEyMTE1MjQ5WhcNMzYwMjE5MTE1MjQ5WjAkMSIwIAYDVQQDExlpbmNvcnRhLXRlc3QudXMuYXV0aDAuY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0PF+Tpwkz9EmzHkdSVjQtKMI+UW7rx9RDePCAjNHyCQxFkkI7/+rTB5bRYDdh75gU1lquItVYgrxMkyc5h8kiHFtfY/W1LO+4ryKshpxLAhcrlu+IuCNUMg7ZcjaWgqC+HOBYb+c8WqElgXjBFjmWwKBp1Ih9HF2nTFCl6ZW8kx4Qpqj1B0w94TJwwu49C+hjk8bIxNeIokB8fzp96JVHcnPf7fifVXhbxJZNGvbtY/+UptXh5UIAzypRMYosMoK7PmwJS8zNOPYMR+s93wbCqopTa2DOxs7HvDaZMojpx9+idSrl3hbZCZrNGhHGwXnKfb55EHqtGg/nbqKKYYURQIDAQABo0IwQDAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQWBBSxKLJ4vA1RK8xK7DKYCP6DS0nmADAOBgNVHQ8BAf8EBAMCAoQwDQYJKoZIhvcNAQELBQADggEBABMRR+cwN2xuI3Ezr9OR2o9Xgf5y856ragpKuagDEmyeHZLx2PFIWBAYInfDQtjw0GECTbN9FXJJVGjrogv0onOxu8UaTRWWjwIkJhNNqv/12Mghnzj4Qgt47czsEujJyq4OfT4Ebk0/RvHtVWUZm0mU9Jgz3oCNw3XYVFA2L03OWuZM4GXpgRn+oJNN2V+vr/ZnK4E6P5Itpn4piRzoGKdMLKBJOgqRlcMDlxlvvI95ewkBG55oQJIl20DiklFqc9EoyNdrPV3M4Hr8FV9LDDW/m79yV1ub3XH8BNBJvpyx4Wc6FZU3FgOj1V0L9AYvGTEfX663Wo9HTXSB/T0H70E=
+11- Don’t forget to add users to your auth0 app from the User Management tab, and also to add SSO users to your Incorta instance.
+
+12- Login to Incorta with your instance URL followed by !<tenant_name> (Example: http://localhost:8080/incorta/!demo/)"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/3616014337/Azure+Active+Directory+SAML+SSO+with+Application+Proxy,"Azure Active Directory SAML SSO with Application Proxy
+1- Go to Enterprise applications > Application proxy > Configure an app
+2- Set your App Name, and set the Internal URL with the actual Incorta URL.
+Set the Internal URL in this structure https://hostName/incorta/, without the tenant name
+3- Select Azure Active Directory as the Pre Authentication method for your application.
+4- Copy the External URL for the application. You'll need this URL to complete the SAML configuration.
+5- Go to your app, then select Single sign-on > SAML
+6- Edit the Basic SAML configuration section by adding the External proxy URL as indicated below.
+7- Add another Reply URL with the tenant name, and set it as a Default
+8- Edit the Attributes and Claims section to add a custom claim named loginName like the following screenshots. Make sure that the Source attribute matches the login name field for the Incorta user
+9- Go to Users and Groups, and assign the users to your app.
+10 - Now, you can configure the Incorta SSO tenant, and log in to Incorta using Incorta's URL followed by 
+!<tenant_name> [Example: http://hostname/incorta/!default/ ]"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/1469743345/Azure+Active+Directory+SSO+More+Common+than+ADFS,"Azure Active Directory SSO (More Common than ADFS)
+No files shared here yet.
+  Drag and drop to upload or browse for files
+Top of Form
+Upload file
+File description
+Bottom of Form
+“ Prepared by Mohamed Ghayaty - Incorta SysOps Team Email : mohamed.ghayaty@incorta.com ”
+This Document contains detailed steps of how to integrate Incorta with Azure Active Directory SSO online subscription and how to synchronize users between Incorta and Azure Active Directory SSO online subscription.
+Important Hints about Sync-users part:
+Azure Active Directory Enterprise applications Can't be treated as LDAP, While LDAP is the only way Incorta uses to Sync Users.
+Instead, Azure Portal itself can be treated as LDAP via Azure AD domain services and that's what we use plus workarounds to perform sync users part.
+First Part : SSO Integration,
+Create Azure AD SSO application and Integrate Incorta with it
+Please refer to below URL
+Author : Ahmed Eissa - Dev Team Email : ahmed.eissa@incorta.com Azure ADFS SSO Integration
+Second Part : Sync Users,
+Configure Azure Portal Account as LDAP Create LDAP Authentication user:
+From All Services, Go to ""Users"",
+Then Click on "" New User"",
+Fill in Fields, Make sure that new user has Email configured in its profile,
+Azure will give Initial password for the new user, save this password, then navigate to below link:
+https://account.activedirectory.windowsazure.com/r/#/profile
+Sign in to the above link using newly created user/pass.
+It'll ask you to enter new credentials after first login.
+Change the password, and Wait for 20 Mins, Until Sync Happened in Azure.
+Enable Azure Active Directory Domain Services using the Azure portal:
+Follow Steps Mentioned in below Link : https://docs.microsoft.com/en-us/azure/active-directory-domain-services/active-directory-ds-getting-started
+Add User to Domain Service Admin Group:
+Note: User added to this group will has the authority to Authenticate LDAP.
+1.Open your ""Azure AD Domain Services"", and select domain name, in our example it's ""mohamedkhaledincorta.onmicrosoft.com"",
+2.Then Select Properties,
+3.From the opened page, Search for ""Admin Group"", its name is ""AAD DC Administrators"" and click on it,
+Click on members and add your user that should authenticate LDAP and add it to owners too,
+5.Still in Properties page, Take a note from following fields ( Location , IP Address on virtual network, Security LDAP external Address ),
+Add Azure AD Domain Service IPs to the Virtual network DNS servers :
+From Azure AD Domain Service, Click on the domain name and select ""Properties"", Then search for ""Available Virtual Network /SUBNET"" and click on it , in our example its ""incorta-vnet/default"",
+Click on ""DNS Servers"" then in Custom, Add the 3 IPs of the newly created Domain service ( internal and external ):
+Note: Those IPs will be used to discover the LDAP in the following steps.
+[ Validation ] – Connect to LDAP Via Windows LDP.exe:
+Now, Azure is LDAP, Below steps will help you to see the tree from windows VM Machine,
+Using Azure Virtual Machines Service, Create Windows VM and make sure it's in same Resource Group and Area like pre-configured AD Domain service.
+Login to the machine via Remote Desktop Connection.
+Make Windows VM join Domain we configured in the above sections,
+From ""This PC"", right click and select Manage, In ""Computer name, domain, workgroup settings"" Click on ""Change Settings"",
+Click on Change,
+Then, Click on ""Member Of"" and select ""Domain"", then type the created Domain name in previous sections, in our example it's ""mohamedkhaledincorta.onmicrosoft.com""
+Open IE browser or chrome and Download LDP tool using below link: https://www.computerperformance.co.uk/w2k3/utilities/ldp.htm
+After successfull download, Click on LDP.exe
+LDP tool will be empty like below Snaptshot,
+Note : To View the tree of any LDAP we should go through 3 steps ( Connect, Bind, and View ), All steps will be shown in detail within the below steps:
+From Connection, Select ""Connect"",
+In Server Type Domain Name and in Port Type ""389"",
+Now, Let's Bind .. From Connection Select Bind,
+10. Enter User Name we created in previous Section and password then make sure you checked the Domain Field.
+10.
+11. Now, We're ready to View the tree, From View, Select Tree,
+12. Click on Drop Down icon and select our Domain Name in the shown format,
+13. Nice, Now you can see the tree and this is an Excellent Validation to the previous work.
+[ Validation ] – Connect to LDAP Via Linux ""ldapsearch"":
+Using Azure Virtual Machines Service, Create Linux VM in the Same Zone and resource group like AD Domain service.
+Installing ""ldapsearch"",""ldapsearch"" exists in many ldap clients packages, Let's search for one of them using below command,
+yum whatprovides */ldapsearch
+Based on the result, run the below command,
+yum install <package_name>
+Now, ""ldapsearch"" is installed, Run the below command on your linux terminal,
+ldapsearch -x -H 'ldap://10.0.0.17:389' -b 'DC=mohamedkhaledincorta,DC=onmicrosoft,DC=com' -s base -D 'mohamed.abdullah@m ohamedkhaledincorta.onmicrosoft.com' -w 'password'
+where,
+IP Internal IP of the Domain Service.
+Domain Name mohamedkhaledincorta.onmicrosoft.com DC=mohamedkhaledincorta,DC=onmicrosoft,DC=com User User We created previously mohamed.abdullah@mohamedkhaledincorta.onmicrosoft.com
+Password Enter User Password
+Now, You've a Successfully configured Azure AD Domain Service and it's accessible. If Any issues appeared, Revisit the steps or open ticket against Azure support team.
+Create Azure Group:
+From Azure All Services, Select Groups.
+Create New Group.
+Configure Azure Group and Add all members you need to login to incorta to this group.
+Add This group to pre-created Azure AD SSO application in Part 1.
+From All Services, Select ""Azure Active Directory"",
+Select ""Enterprise Applications"", Then Click on APP created in Part 1.
+Select ""Users and groups"", And add the group we created.
+Now, We're ready to sync Azure users from Incorta.
+Configure Incorta to Sync Azure user in SSO group related to Azure AD SSO app:
+Notes :
+Edit file <Incorta_Installation_Dir>/bin/ldap-config.properties Notice Lines in Red.
+# Provide ldap url
+# Example: ldap://HOST_NAME:PORT_NUM
+ldap.base.provider.url=ldap://10.0.0.17:389
+# Distinguished Name to connect with
+ldap.base.dn=OU=AADDC Users,DC=mohamedkhaledincorta,DC=onmicrosoft,DC=com # Distinguished Name and password of a user in the ldap to authenticate with ldap.user.dn=mohamed.abdullah@mohamedkhaledincorta.onmicrosoft.com ldap.user.dn.password=Password
+# The attributes that will map login name, mail and name of Incorta user ldap.user.mapping.login=mail
+ldap.user.mapping.name=cn
+ldap.user.mapping.mail=mail
+# The attributes that will map name and attached users of Incorta group ldap.group.mapping.name=cn
+Make sure that Linux VM Contains Incorta is located in same zone and Resource Group like Azure AD Domain Service. Incorta is on HTTPS
+ldap.group.mapping.member=member
+# a filter to search users with given example
+ldap.user.search.filter=(&(objectCategory=user)(memberOf=cn=SSOGROUP3,OU=AADDC Users, DC=mohamedkhaledincorta,DC=onmicrosoft,DC=com))
+# a filter to search groups with given example ldap.group.search.filter=(&(objectCategory=Group)(cn=SSOGROUP3))
+#user.type is optional with default (ldap) and indicates the user type, possible values are: internal, sso, and ldap user.type=ldap
+#ldap.follow.referral is optional with default (false) and indicate that it does not have a copy of a requested object and giving the client a location that is more likely to hold the object,
+#which the client uses as the basis for a DNS search for a domain controller.
+#Ideally, referrals always reference a domain controller that indeed holds the object.
+# If set to true ,the search will be slower So Please don't use it unless you have multiple reference Site! ldap.follow.referral=false
+Explanation:
+ldap.base.provider.url ldap://<local_ip_of_domain_service>:389 ldap.base.dn=OU=AADDC Users,DC=mohamedkhaledincorta,DC=onmicrosoft,DC=com
+Where,
+AADC Users is the group contains users of Azure Domain Service. DC=mohamedkhaledincorta,DC=onmicrosoft,DC=com mohamedkhaledincorta.onmicrosoft.com domain Name.
+ldap.user.dn User Created in Part 2, should be member of Admin Group of Domain Service ""AAD DC Administrators""
+ldap.user.dn.password User password
+ldap.group.mapping.member should be ""member""
+ldap.user.search.filter=(&(objectCategory=user)(memberOf=cn=SSOGROUP3,OU=AADDC Users, DC=mohamedkhaledincorta,DC=onmicrosoft,DC=com))
+Where cn Group we created earlier ""Create Azure Group/Part2"" ldap.group.search.filter=(&(objectCategory=Group)(cn=SSOGROUP3))
+Where cn Group we created earlier in ""Create Azure Group/Part2""
+Edit below line in file <Incorta_Installation_Dir>/sync_directory_with_ldap.sh
+session=`$incorta_cmd login https://incorta_url:port/incorta <tenant_name> incorta_user incorta_password False`
+Run Script sync_directory_with_ldap.sh , notice and validate results.
+How to validate ?
+exported Group -> Should be the group which is member of Azure AD SSO app that we created in ""Create Azure Group/Part2""
+exported Users -> Members we added to this group.
+Important Notes:
+All users should have Email configured.
+Any Change in Azure Part will take min 20 mins to Reflect in the system."
+https://incorta.atlassian.net/wiki/spaces/INC/pages/616300630/Azure+ADFS+SSO+Integration,"Azure ADFS SSO Integration
+To enable single sign on using Azure ADFS, we need to configure both Azure ADFS and Incorta. This document captures all the steps needed.
+An important thing to note that Azure ADFS accepts https URLs only , so incorta should be either https enable or any other solutions that make incorta urls are https
+Step-by-step guide
+For each tenant that is needed to be SSO enabled , the following steps should be repeated.
+It should be noted that the following steps were done on premium azure account .
+Azure ADFS Configurations :
+Select ""Azure Active Directory"" then ""Enterprise Application""
+Add new application
+Select non gallery Application
+Select Single sign-on
+In Single Sign-on Mode, select  SAML-based sign-on
+In the ""Identity (Entity ID)"" add unique value in your tenant  for example https://demo.incorta:8443/incorta
+In the ""Reply URL"" in Azure ADFS enter incorta installation URL
+pattern is  https://<incorta-server>/incorta/!<tenant-name>/
+Check View and edit all other user attributes
+In the SAML Token Attributes section , Click on the Add attribute URL
+in the name field enter loginName and in the value  field select a relevant field (this value should be as the login name field in Incorta installation) and then click OK button
+Download Metadata xml (You will need while configuring incorta SSO property)
+Click on the configure section
+Incorta Configuration
+On Incorta side, following configuration changes are needed:
+Enable Single Sign on at Tenant Level
+Create a Configuration file
+Modify server.xml to refer configuration file created in step 2
+Bounce Incorta
+Enable Single Sign on at Tenant Level
+A tenant can be single sign on enabled either from Admin screen or the tmt command .
+Using Admin Screen :
+Navigate to admin screen
+Click on Tenents tab
+Click on the desired tenant name
+Using tmt command :
+./tmt.sh --update-property <tenantname> sso-login-enable true
+Example: ./tmt.sh --update-property demo sso-login-enable true
+Create a Configuration file
+Create a configuration file on Incorta. Pasted below is a sample configuration file .
+Change the following properties :
+onelogin.saml2.sp.entityid : Should be same value as in the ""Identity (Entity ID)"" as configured in Azure ADFS).
+onelogin.saml2.sp.assertion_consumer_service.url :Should be same value as ""Reply URL"" in Azure ADFS.
+pattern is  https://<incorta-server>/incorta/!<tenant-name>/
+onelogin.saml2.sp.single_logout_service.url : Should be , ""http:///<incortaHostName>/incorta/logout.jsp?rediredtUrl=."" .
+onelogin.saml2.idp.entityid = Should be the same value entityID attribute in Azure ADFS metadata xml file (can be downloaded from ""4. SAML Signing Certificate"" section in the Metadata XML).
+onelogin.saml2.idp.single_sign_on_service.url : Should be the same value in the ""Location"" attribute in the 
+""SingleSignOnService"" tag in Azure ADFS metadata xml file
+onelogin.saml2.idp.single_logout_service.url = Should be https://login.microsoftonline.com/common/wsfederation?wa=wsignout1.0 .
+onelogin.saml2.idp.x509cert :Should be the value of ""X509Certificate"" in Azure ADFS metadata xml file .
+Fields that are highlighted in red are customer specific.
+------ Beginning of the File   /home/incorta/IncortaAnalytics/sso/ssoDemoConf.properties     --------
+# If 'strict' is True, then the Java Toolkit will reject unsigned
+# or unencrypted messages if it expects them signed or encrypted
+# Also will reject the messages if not strictly follow the SAML
+onelogin.saml2.strict = false
+# Enable debug mode (to print errors)
+onelogin.saml2.debug = true
+# Service Provider Data that we are deploying
+#v
+# Identifier of the SP entity (must be a URI)
+onelogin.saml2.sp.entityid = https://localhost:8443/incorta
+# Specifies info about where and how the <AuthnResponse> message MUST be
+# returned to the requester, in this case our SP.
+# URL Location where the <Response> from the IdP will be returned
+#onelogin.saml2.sp.assertion_consumer_service.url = http://localhost:8080/java-saml-tookit-jspsample/acs.jsp
+onelogin.saml2.sp.assertion_consumer_service.url = https://localhost:8443/incorta/!demo/
+# SAML protocol binding to be used when returning the <Response>
+# message. Onelogin Toolkit supports for this endpoint the
+# HTTP-POST binding only
+onelogin.saml2.sp.assertion_consumer_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+# Specifies info about where and how the <Logout Response> message MUST be
+# returned to the requester, in this case our SP.
+onelogin.saml2.sp.single_logout_service.url = https://localhost:8443/incorta/logout.jsp?rediredtUrl=.
+# SAML protocol binding to be used when returning the <LogoutResponse> or sending the <LogoutRequest>
+# message. Onelogin Toolkit supports for this endpoint the
+# HTTP-Redirect binding only
+onelogin.saml2.sp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+# Specifies constraints on the name identifier to be used to
+# represent the requested subject.
+# Take a look on lib/Saml2/Constants.php to see the NameIdFormat supported
+#onelogin.saml2.sp.nameidformat = urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified
+# Usually x509cert and privateKey of the SP are provided by files placed at
+# the certs folder. But we can also provide them with the following parameters
+onelogin.saml2.sp.x509cert =
+# Requires Format PKCS#8 BEGIN PRIVATE KEY 
+# If you have PKCS#1 BEGIN RSA PRIVATE KEY convert it by openssl pkcs8 -topk8 -inform pem -nocrypt -in sp.rsa_key -outform pem -out sp.pem
+onelogin.saml2.sp.privatekey =
+# Identity Provider Data that we want connect with our SP
+#
+# Identifier of the IdP entity (must be a URI)
+onelogin.saml2.idp.entityid =https://sts.windows.net/e1641373-1717-4ca1-aac0-c1fafd043b16/
+# SSO endpoint info of the IdP. (Authentication Request protocol)
+# URL Target of the IdP where the SP will send the Authentication Request Message
+onelogin.saml2.idp.single_sign_on_service.url = https://login.microsoftonline.com/e1641373-1717-4ca1-aac0-c1fafd043b16/saml2
+onelogin.saml2.security.want_nameid = false
+# SAML protocol binding to be used when returning the <Response>
+# message. Onelogin Toolkit supports for this endpoint the
+# HTTP-Redirect binding only
+onelogin.saml2.idp.single_sign_on_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+#if the above did not work try the below
+#onelogin.saml2.idp.single_sign_on_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST
+# SLO endpoint info of the IdP.
+# URL Location of the IdP where the SP will send the SLO Request
+#onelogin.saml2.idp.single_logout_service.url = https://incorta-dev.onelogin.com/trust/saml2/http-redirect/slo/610260
+onelogin.saml2.idp.single_logout_service.url = https://login.microsoftonline.com/common/wsfederation?wa=wsignout1.0
+# https://login.microsoftonline.com/e1641373-1717-4ca1-aac0-c1fafd043b16/saml2
+# Optional SLO Response endpoint info of the IdP.
+# URL Location of the IdP where the SP will send the SLO Response. If left blank, same URL as onelogin.saml2.idp.single_logout_service.url will be used.
+# Some IdPs use a separate URL for sending a logout request and response, use this property to set the separate response url
+onelogin.saml2.idp.single_logout_service.response.url =
+# SAML protocol binding to be used when returning the <Response>
+# message. Onelogin Toolkit supports for this endpoint the
+# HTTP-Redirect binding only
+onelogin.saml2.idp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+# Public x509 certificate of the IdP
+onelogin.saml2.idp.x509cert =MIIC8DCCAdigAwIBAgIQIA1O3lGDAIhNUwrVs/bxpDANBgkqhkiG9w0BAQsFADA0MTIwMAYDVQQDEylNaWNyb3NvZnQgQXp1cmUgRmVkZXJhdGVkIFNTTyBDZXJ0aWZpY2F0ZTAeFw0xODA2MDgxMjE4MDRaFw0yMTA2MDgxMjE4MDRaMDQxMjAwBgNVBAMTKU1pY3Jvc29mdCBBenVyZSBGZWRlcmF0ZWQgU1NPIENlcnRpZmljYXRlMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr+KzyudnWjCkSlWcQIoGST4OVBAOQD0wHy+wI3t3Qmir7km/NyBXZFaXC9aK12XU+4Lziyjbvf+c2l+giSww+Rz7O+BJ+oopxV19n84QTCatV9gmdsDO21k6/x4Xmu/xTYD45OCRrJItQr+1zvk4F5P/0/lwbcjhhP4ylDf6gRcO9BIKrmQRgQA2hjI0b+RLgmxylMd8c9bHwknElnsgOlsVdOn1xaUd4b3tkQREVPvmLgj2/O0qBP/rOzdzo36Jo87Xx4Y3zgFWDO21ClzwXDmdd5ifVnM1aGWF7SYRYhVOZ805Ovzaia/JO8fuhF2sKruqzlQrP4PjJggP29kA9wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQCRzAa/bfRRiCgQgY+Z7J7Hhj0epQallchQuZ2dAVghrCoyCceb0D/e3sBm5nXQrj817nP53iLlMQZdcM64f0mm8u9nqN5q6PR6d0RwJOSQcT+UwmtMdOrxpfuEHqnP8HfOSxXDo7/H1beVxutqbTGGzZkr+TM52uMw2WkkAMaooP9fvm+HlI4d8MylX1DMCEtv6IBOLC2HMr6+eL2nGrcwvMZUHdX0MVlDdEf3wqNoDsRkfgJu8K+L88RThXUa4sSa0pJcdIbnI4cr2AtsHSHhI/iIQHrqW/3tn1dP6IbEF29AB1WkWvlChjo0tOvKldyloXUUBNVSwxMSkAUXUw6b
+# Instead of use the whole x509cert you can use a fingerprint
+# (openssl x509 -noout -fingerprint -in ""idp.crt"" to generate it,
+# or add for example the -sha256 , -sha384 or -sha512 parameter)
+#
+# If a fingerprint is provided, then the certFingerprintAlgorithm is required in order to
+# let the toolkit know which Algorithm was used. Possible values: sha1, sha256, sha384 or sha512
+# 'sha1' is the default value.
+# onelogin.saml2.idp.certfingerprint = 
+# onelogin.saml2.idp.certfingerprint_algorithm = sha1
+# Security settings
+#
+# Indicates that the nameID of the <samlp:logoutRequest> sent by this SP
+# will be encrypted.
+onelogin.saml2.security.nameid_encrypted = false
+# Indicates whether the <samlp:AuthnRequest> messages sent by this SP
+# will be signed. [The Metadata of the SP will offer this info]
+onelogin.saml2.security.authnrequest_signed = false
+# Indicates whether the <samlp:logoutRequest> messages sent by this SP
+# will be signed.
+onelogin.saml2.security.logoutrequest_signed = false
+# Indicates whether the <samlp:logoutResponse> messages sent by this SP
+# will be signed.
+onelogin.saml2.security.logoutresponse_signed = false
+# Sign the Metadata
+# Empty means no signature, or comma separate the keyFileName and the certFileName
+onelogin.saml2.security.want_messages_signed =
+# Indicates a requirement for the <samlp:Response>, <samlp:LogoutRequest> and
+# <samlp:LogoutResponse> elements received by this SP to be signed.
+onelogin.saml2.security.want_assertions_signed = false
+# Indicates a requirement for the Metadata of this SP to be signed.
+# Right now supported null (in order to not sign) or true (sign using SP private key) 
+onelogin.saml2.security.sign_metadata = false
+# Indicates a requirement for the Assertions received by this SP to be encrypted
+onelogin.saml2.security.want_assertions_encrypted = false
+# Indicates a requirement for the NameID received by this SP to be encrypted
+onelogin.saml2.security.want_nameid_encrypted = false
+# Authentication context.
+# Set Empty and no AuthContext will be sent in the AuthNRequest,
+# Set comma separated values urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Password
+#onelogin.saml2.security.requested_authncontext = urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Password
+#onelogin.saml2.security.requested_authncontext = urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Password,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:TLSClient,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:X509,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:federation:authentication:windows,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos
+#onelogin.saml2.security.requested_authncontext = urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Password,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:TLSClient,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:X509,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:federation:authentication:windows,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos
+onelogin.saml2.security.requested_authncontext = urn:oasis:names:tc:SAML:2.0:ac:classes:Password
+# Allows the authn comparison parameter to be set, defaults to 'exact'
+#onelogin.saml2.security.requested_authncontextcomparison = exact
+onelogin.saml2.security.requested_authncontextcomparison = exact
+# Indicates if the SP will validate all received xmls.
+# (In order to validate the xml, 'strict' and 'wantXMLValidation' must be true).
+onelogin.saml2.security.want_xml_validation = true
+# Algorithm that the toolkit will use on signing process. Options:
+# 'http://www.w3.org/2000/09/xmldsig#rsa-sha1'
+# 'http://www.w3.org/2000/09/xmldsig#dsa-sha1'
+# 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256'
+# 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha384'
+# 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha512'
+onelogin.saml2.security.signature_algorithm = http://www.w3.org/2000/09/xmldsig#rsa-sha1
+# Organization
+onelogin.saml2.organization.name = SP Java 
+onelogin.saml2.organization.displayname = SP Java Example
+onelogin.saml2.organization.url = http://sp.example.com
+# Contacts
+onelogin.saml2.contacts.technical.given_name = Technical Guy
+onelogin.saml2.contacts.technical.email_address = technical@example.com
+onelogin.saml2.contacts.support.given_name = Support Guy
+onelogin.saml2.contacts.support.email_address = support@@example.com
+--------- End of File ------------
+Modify server.xml
+Modify server.xml (located in <incorta home>/server/Conf/server.xml) to add the following tag at the beginning of <Host> tag:
+```
+<Valve className=""com.incorta.sso.valves.OneLoginValve""
+confFilesMap=""Tenant_Name=Absolute_Path,Tenant_Name2=Absolute_Path2""
+LoggingEnabled = ""true""
+/>
+```
+Where:
+1. Tenant_Name is the name of Incorta Tenant.
+2. Absolute_Path is the path of sso configuration file.
+3.  LoggingEnabled  This flag turns on the the valve logging messages. By default it's false which mean the logging is turned off.
+Example  :
+<Valve className=""com.incorta.sso.valves.OneLoginValve""
+confFilesMap=""demo=/home/incorta/IncortaAnalytics/sso/ssoDemoConf.properties""
+LoggingEnabled = ""true""
+/>
+Related articles
+Page:
+Inspector Executor
+Page:
+Automatic Table Selection
+Page:
+How To Change The Thread Pool Used for ETL Steps
+Page:
+Geminga
+Page:
+Supporting Multi Source data"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/1975812174/Configure+Okta+SSO+on+your+local+development+environment,"Configure Okta SSO on your local development environment
+steps to configure Okta SSO on your local development environment
+Go to okta.com
+Click on Try Okta (for free trials)
+Enter the signup information
+After entering the sign up information, Okta will send email with the newly created account credentials
+Login using the link sent in the email with the credentials provided
+After logging in, on the navbar, click on Applications
+On the top left corner, click Add Application
+On the top right corner, click Create New App
+from platform choose web and from Sign on method choose SAML 2.0
+click on Create
+enter the App name, then click next
+in Single sign on URL, enter the URL of incorta that will redirect to okta which is <URL>/incorta/!<tenantName>/, example http://localhost:8080/incorta/!demo/
+Note: do not forget to add backslash “/“ at the end of the URL
+activate Use this for Recipient URL and Destination URL checkbutton
+in Audience URI (SP Entity ID) enter the same value of Single sign on URL like the following image.
+add the user mapping from okta to Incorta, So in Name enter loginName and in Value enter user.email
+check the information are like the following image then click next
+choose I'm a software vendor. I'd like to integrate my app with Okta then click Finish
+in the Sign On tab, click on Identity Provider metadata, which will open a new tab in the browser containing XML
+right click on any free space and select save as, then click save to download the XML
+go to the page of the application you created, then click on the Assignments tab
+click on Assign, then assign to people
+choose the users assigned to this application by clicking assign
+click Save and Go Back, then click Done
+Note: the user email in Okta should match the loginName in incorta
+enable SSO property for the tenant by setting the value of sso-login-enable key property (in incorta database table TENANT_CONFIG) that is related to the tenant used in okta to be true
+open eclipse and open the servers tab
+right click on any empty space and choose new then choose server
+choose incorta.server and click add, then click Finish
+double click on the server you created
+change the configuration path to the path of the server’s configuration
+click on Use custom location in server locations and change the server path.
+save the changes
+click on Open launch configuration
+go to Classpath and add the following two jars
+mysql-connector-java (in case of using mysql)
+commons-codec
+go to Arguments then add the following lines in VM arguments% -Djava.util.logging.manager=org.apache.juli.ClassLoaderLogManager -Dmax.off.heap.memory=100 -Dengine.offheap=true
+you can also refer to the following document: /wiki/spaces/INC/pages/18448391
+click apply, then click ok
+open the server configuration folder then open server.xml
+add the following as Valve in the server.xml
+<Valve className=""com.incorta.sso.valves.OktaValve""
+confFilesMap=""TENANT_NAME=ABSOLUTE_PATH,TENANT_NAME2=ABSOLUTE_PATH2""
+LoggingEnabled = ""true""
+/>
+open okta metadata xml file that we downloaded earlier and add the following tags between md:EntityDescriptor tag: 
+<configuration>
+<default><http://www.okta.com/exk2dy7f8xbKMqTG05d6</default>>
+<applications>
+<application>
+<md:EntityDescriptor>
+</md:EntityDescriptor>
+</application>
+</applications>
+</configuration>
+
+also make sure that the URL in the default tag should be the same as the entityId in <md:EntityDescriptor>
+So eventually your xml folder should look something like this:
+now double click on the server and click on Open launch configuration, then choose the Classpath tab
+, then click on Add external jars, navigate to Tomcat installation directory then include all the jars inside lib folder except tomcat7-websocket.jar and websocket-api.jar
+then click on add projects, and add incorta.addons in the classpath, then click ok
+then click on add jars, then add the jars in the following image from lib/Okta
+add slf4j-api-1.7.25.jar from lib/slf4j and commons-logging-1.1.13.jar and commons-collections-3.2.1.jar from lib/apache and joda-time-2.1.jar from lib/joda
+make sure that the classpath contains the following dependencies in the same order
+start the server, then login into Incorta and create a new user with type SSO and the loginName is the same user email in okta
+sign out of the current user and then type the localhost:8080/incorta/!<tenantName> for example localhost:8080/incorta/!demo and should be redirected to okta login page
+enter the username which is okta email and password and you shall be redirected to Incorta"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/2197127199/Configuring+Incorta+to+integrate+with+Auth0+as+an+SSO+provider,"Configuring Incorta to integrate with Auth0 as an SSO provider
+Define Incorta as a new application in Auth0
+Enabling SSO Authentication in Incorta
+Define Incorta as a new application in Auth0
+Auth0 dashboard layout may be different from the time this document is written.
+1- Create a new Auth0 developer’s account from here
+2- When you logon to Auth0 from your dashboard, click on “Create Application. “
+3- Choose “Regular Application“ and click “Create. “
+4-Go to the “Settings“ tab ( We will use “Domain,” “client,” and “ClientSecret”)
+5- in the “Allowed Callback URLs“ section add “http://<hostname>:<port>/incorta/!<tenant_name>/callback“ (Example: http://localhost:8080/incorta/!demo/callback)
+6- In the “Allowed Web Origins” section add “http://<hostname>:<port>“ (Example: http://localhost:8080)
+7- In the “Allowed Logout URLs” section add “http://<hostname>:<port>/incorta/!<tenant_name>“ (Example: http://localhost:8080/incorta/!demo)
+8- Save your changes
+9- Click on the “Rules“ menu item in the left menu and choose “Create Rule. “
+10- Choose from the “Enrich profile” section “add attributes to a user for a specific connection.”
+11- Add the below code, then save changes
+function (user, context, callback) {
+const namespace = 'http://incorta.com/';
+context.accessToken[namespace + 'email'] = user.email;
+context.accessToken[namespace + 'id'] = user.user_id;
+context.accessToken[namespace + 'name'] = user.name;
+// The below code is not required
+context.accessToken[namespace + 'group_name'] = 'Auth0_external';
+context.accessToken[namespace + 'group_description'] = 'Auth0 external authorized group';
+callback(null, user, context);
+}
+12- Click on the “APIs” menu item from the left menu and choose “Create API. “
+13- Give it a friendly name in the “Name“ section (Example: Incorta)
+14- In the “identifier“ add “http://<hostname>:8080/incorta/!<tenant_name>“ (Example: http://localhost:8080/incorta/!demo)
+15- Click on “Create. “
+Enabling SSO Authentication in Incorta
+1- From the tenant configurations in CMC, set the authentication type to SSO
+2- Update “server.xml” of your Incorta analytics service instance with the below Valve tag.
+the Valve tag should be added directly under the Host tag
+<Valve className=""com.incorta.sso.valves.auth0.Auth0Valve""
+appDomain=""dev-7ofu4i2i.auth0.com""
+clientId=""zsnQb4dBSI738yN6oLFy438yFsbzAK7C""
+clientSecret=""QRPgXKmHT_3ZBK_POGurUa-ANWKxjPesG53ebZxCkYeFu9fIjPWJbOBvz0QslVYr""
+callbackURL=""http://localhost:8080/incorta/!demo/callback""
+embdeddedURL=""http://localhost:8080/incorta/!demo/embedded""
+claimName=""http://incorta.com/email""
+audience=""http://localhost:8080/incorta/!demo/""
+LoggingEnabled=""true""
+/>
+3- Go to “IncortaNode/runtime/lib”
+4- Remove “incorta.onelogin.valv-1.0.jar.”
+5- Restart the analytics service and log in using Incorta’s URL followed by “!<tenant_name>“ (Example: http://localhost:8080/incorta/!demo/)
+6- You will be directed to Auth0 to authenticate, and then you will be redirected to Incorta’s home page"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/2904064094/Cookie-Based+Provider+Setup+Instructions,"Cookie-Based Provider Setup Instructions
+How to set up the Cookie-based provider
+There are 2 implementations to the Cookie-Based provider: Pega, and Balady
+Cookie-Based Provider :
+1- Install the latest version of Incorta
+2- Get the last updated simulator war from the server team
+3- Set the simulator war at IncortaAnalytics/IncortaNode/runtime/webapps
+4- prepare the Cookie-Based configurations, as the following
+For Pega
+cookie.name=id
+validation.service.name=pega
+validation.service.url=http://app.incorta.com:8080/incorta.simulators/balady/validate
+validation.service.userName=admin
+validation.service.password=YWRtaW4=
+For Balady
+cookie.name=id
+validation.service.name=Balady
+validation.service.url=http://app.incorta.com:8080/incorta.simulators/balady/validate
+validation.service.userName=admin
+validation.service.password=YWRtaW4=
+validation.service.tokens.url=
+5- Update the hosts file in your machine at sudo vi /etc/hosts
+Incorta-domain app.incorta.com
+For example :
+127.0.0.1 app.incorta.com
+6- For Pega go to https:/{domain name}/incorta.simulators/pega/home
+For Balady https:/{domain name}/incorta.simulators/balady/home"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/2375090213/Cookie-based+valve+setup+instructions,"Cookie-based valve setup instructions
+Custom documentation for MOMRA
+The instructions:
+1- Update the server.xml file located in all Incorta Analytics Services <IncortaInstallation>/IncortaNode/services/<ANALYTICS_SERVICE_ID>/conf/server.xml
+with the following:
+under the <Host> tag, add
+<Valve
+LoggingEnabled=""true""
+className=""com.incorta.sso.valves.CookieBasedValve""
+cookieName={Authentication cookie name}
+validationServiceURL= {the validation service URL}
+validationServiceUserName={Incorta userName, to access the service}
+validationServicePassword={Incorta password, Base64 encoded}
+/>
+For MOMRA, with the following data
+Validation Service URL: https://pegadev.momra.gov.sa/prweb/PRRestService/Incorta/v1/Authentication
+Validation Service UserName: IncortaUser
+Validation Service Password: 6+g4^!S+V`+qXpQ
+The valve will be:
+<Valve
+LoggingEnabled=""true""
+className=""com.incorta.sso.valves.CookieBasedValve""
+cookieName=""RequestorID""
+validationServiceURL=""https://pegadev.momra.gov.sa/prweb/PRRestService/Incorta/v1/Authentication""
+validationServiceUserName=""IncortaUser""
+validationServicePassword=""PDYrZzReIVMrVmArcVhwUQ==""
+/>
+2- Enable SSO for the tenant
+3- Restart Incorta analytics server
+4- Connect to Incorta by the following URL format:
+https://<incorta-server>/incorta/!<tenant-name>/, with the cookie specified at the valve
+5- Make sure that there is a user in Incorta with a login name similar to the user name sent from the validation service."
+https://incorta.atlassian.net/wiki/spaces/INC/pages/2362933985/Cookie-based+valve+test+instructions,"Cookie-based valve test instructions
+Cookie-based valve:
+The cookie-based valve is a custom valve to authenticate users by integrates with a validation service with a custom cookie to validate a user and respond by the user name and status
+It’s a custom valve for MOMRA
+The instructions:
+1- Install the latest version of Incorta
+2- Get the last updated simulator war from the server team
+3- Set the simulator war at
+IncortaAnalytics/IncortaNode/runtime/webapps
+4- Remove incorta.onelogin.valv-1.0.jar from IncortaAnalytics/IncortaNode/runtime/lib, If exists
+5- Update the server.xml file located in <IncortaInstallation>/IncortaNode/services/<ANALYTICS_SERVICE_ID>/conf/server.xml
+with the following:
+Before the <Host> tag, add
+<Valve
+LoggingEnabled=""true""
+className=""com.incorta.sso.valves.CookieBasedValve""
+cookieName=""{cookieName}""
+validationServiceURL=""https://{domain name}/incorta.simulators/pega/validate
+validationServiceUserName=""{Incorta userName, to access the service}
+validationServicePassword={Incorta password, Base64 encoded}
+/>
+The Incorta Pega simulator URL → https://{domain name}/incorta.simulators/pega/validate
+The Incorta userName (to access the service): admin
+The Incorta password: admin
+“admin“ word based64 encoded: YWRtaW4=
+For example:
+<Valve
+LoggingEnabled=""true""
+className=""com.incorta.valves.CookieBasedValve""
+cookieName=""abc""
+validationServiceURL=""https://momra-sso.clouddev3.incortalabs.com/incorta.simulators/pega/validate""
+validationServiceUserName=""admin""
+validationServicePassword=""YWRtaW4=""
+/>
+6- Then, restart the Incorta analytics server
+7- Go to https:/{domain name}/incorta.simulators/pega/home
+CookieValue => {UserLoginName}:{User status}
+User status: [ active | inactive | invalid ]
+The Authenticated user must be active
+8- You can find the logs at catalina.out file located in <IncortaInstallation>/IncortaNode/services/<ANALYTICS_SERVICE_ID>/logs"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/2374991906/Cookie-based+valve+Technical+Documentation,"Cookie-based valve [Technical Documentation]
+Cookie-based valve:
+The cookie-based valve is a custom valve to authenticate users by integrates with a validation service with a custom cookie to validate a user and respond by the user name and status
+It’s a custom valve for MOMRA
+Cookie-based valve workflow:
+1- Firstly, the user needs to set the valve at the server.xml as following:
+<Valve
+LoggingEnabled=""true""
+className=""com.incorta.sso.valves.CookieBasedValve""
+cookieName=""{Authentication cookie name}""
+validationServiceURL= ""{the validation service URL}""
+validationServiceUserName=""{Incorta userName, to access the service}""
+validationServicePassword=""{Incorta password, Base64 encoded}""
+/>
+actual example for MOMRA customer with
+Validation Service URL: https://pegadev.momra.gov.sa/prweb/PRRestService/Incorta/v1/Authentication
+Validation Service UserName: IncortaUser
+Validation Service Password: 6+g4^!S+V`+qXpQ
+The valve will be:
+<Valve
+LoggingEnabled=""true""
+className=""com.incorta.sso.valves.CookieBasedValve""
+cookieName=""RequestorID""
+validationServiceURL=""https://pegadev.momra.gov.sa/prweb/PRRestService/Incorta/v1/Authentication""
+validationServiceUserName=""IncortaUser""
+validationServicePassword=""PDYrZzReIVMrVmArcVhwUQ==""
+/>
+Note:
+We decided that the password should be Base64 encoded, because if the password contains any special characters this may cause parsing issue in the XML
+2- When the user calls Incorta with this URL pattern
+https://<incorta-server>/incorta/!<tenant-name>/, with the cookie specified at the valve, the Cookie-based valve will handle it.
+3- The Cookie-based valve will look for a cookie with the name specified at the valve.
+if exits the valve will call the validation service
+4- The valve will call the validation service URL specified at the valve with a basic authorization header
+The request body contrat
+{
+""RequestData"":{
+""RequestorID"": {userId}
+}
+}
+5- We expect the following JSON response from the validation service
+{
+""ID"":{loginName},
+""Status"": [Active| Inactive | Invalid]
+}
+Then we parse this response to get the loginName if the status is Active
+6- Then we set the loginName in a principle and redirect the request to Incorta
+7- We check at the beginning of the valve if the request already has a context, we redirect it to the Incorta directly"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/2901180609/DSAuth+Setup+Test+Instructions+Cloud+On-Prem,"DSAuth Setup & Test Instructions (Cloud & On-Prem)
+How to configure DSAuth (Apple provider) from the CMC
+DSAuth Provider: (On Cloud)
+DSAuth Provider: (On-Prem)
+General configuration
+DSAuth Provider: (On Cloud)
+1- Install the latest version of Incorta
+2- Download the Incorta.simulators war for the cloud testing
+3- Set the simulator war at IncortaAnalytics/IncortaNode/runtime/webapps
+4- Prepare the DSAuth configurations, as the following
+appAdminPassword=xxxappAdminPassword
+appId=xxxId
+appIdKey=xxxKey
+logoutURL=https://sso-ui-hz-v1.clouddev3.incortalabs.com/incorta.simulators/dsauth/signin
+myacinfo=myacinfo
+redirectUrl=https://sso-ui-hz-v1.clouddev3.incortalabs.com/incorta.simulators/dsauth/signin
+userLoginKey=userName
+validateUrl=https://sso-ui-hz-v1.clouddev3.incortalabs.com/incorta.simulators/dsauth/validate
+5- Enable the SSO, then Select the Custom provider from the dropdown list at the security tap at CMC,
+Then type DSAuth at the custom provider name section
+4- Set the DSAuth configurations at the Provider configurations section, then click the Save button
+5- Now, you can log in to Incorta using Incorta’s URL followed by “!<tenant_name>“ (Example: https://hz.cloudstaging.incortalabs.com/incorta/!demo/)
+DSAuth Provider: (On-Prem)
+1- Install incorta on your machine
+2-Download the Incorta.simulators war for the On-Prem testing.
+3- Set the simulator war at IncortaAnalytics/IncortaNode/runtime/webapps
+You can use this command to copy the war to the machine
+scp -i {instance-number}.pem {incorta simulators path}
+incorta@{public ip}:/home/incorta/IncortaAnalytics/IncortaNode/runtime/webapps
+ex:
+scp -i instance-1522.pem /Users/hendzabady/test/incorta.simulators.war
+incorta@3.140.189.201:/home/incorta/IncortaAnalytics/IncortaNode/runtime/webapps
+4- Set a domain name for the machine’s public IP
+1 - On your mac
+run sudo vim /etc/hosts
+add these two lines to the file
+{public IP} ds.incorta.com
+{public IP} app.incorta.com
+ex:
+2- On the machine 
+run sudo vim /etc/hosts
+add this line to the file
+{public IP} ds.incorta.com
+5- Prepare the DSAuth configurations, as the following
+appAdminPassword=xxxappAdminPassword
+appId=xxxId
+appIdKey=xxxKey
+logoutURL=http://ds.incorta.com:8080/incorta.simulators/dsauth/signin
+myacinfo=myacinfo
+redirectUrl=http://ds.incorta.com:8080/incorta.simulators/dsauth/signin
+userLoginKey=userName
+validateUrl=http://ds.incorta.com:8080/incorta.simulators/dsauth/validate
+6- Enable the SSO, then select the Custom provider from the dropdown list at the security tap at CMC,
+Then type DSAuth at the custom provider name section
+7- Set the DSAuth configurations at the Provider configurations section, then click the Save button
+8- Now, you can log in to Incorta using the following URL
+http://app.incorta.com:8080/incorta/!<tenant_name>
+(ex: http://app.incorta.com:8080/incorta/!demo/)
+9- Configure Server Name
+Go to Cluster Configuration
+got to Default Tenant Configuration
+got to Email
+set Server Name to be app.incorta.com
+General configuration
+Create a SSO user on Incorta, you will this user name to login on DS simulator"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/591626244/Implementing+ADFS+Single+Sign-on+SSO+Integration,"Implementing ADFS Single Sign-on (SSO) Integration
+Goal
+Prerequisites
+Implementation Steps
+A. The ADFS Configuration
+B. The Incorta Configuration
+1. Enable SSO for a Tenant
+2. Create a Configuration file
+3. Modify Incorta server.xml
+4. Restart Incorta
+Verify the connection
+known Issues
+ADFS Supported Browsers
+Related articles
+Product documentation now contains this information. Please refer to it and log a DOC Jira ticket if it needs updated. Thanks.
+Not deleting the following content because it may contain customer-specific info. Needs review - HRK
+Goal
+To enable single sign-on using Active Directory Federation Services (ADFS), configure ADFS and Incorta.
+Prerequisites
+ADFS only accepts https URLs. You must set your Incorta instance and any other solutions you use with Incorta to https. Please refer to DELETE - Enable SSL Certificate in 4.x or DELETE - Secure Tomcat with TLS/SSL for 3.x
+Implementation Steps
+The steps are configuration parts that need to be done in the ADFS and in Incorta.
+A. The ADFS Configuration
+ADFS Manager
+From ADFS manager right click on ADFS and then select Add Relaying Party Trust.
+Select Claims aware, then Start.
+Select Enter data about the relaying party Manually, then Next.
+Enter a display name and select Next.
+Browse to an encryption certificate or select Next to continue without an encryption certificate.
+Select Enable for the SAML 2.0 WebSSO protocol.
+Enter the Incorta SSO link in the format and select Next
+SSO Tenant Format
+https://<incorta-server>/incorta/!<tenant-name>/
+For example, https://qa.incorta.com/incorta/!demo/
+Add a relying identifier. For example, enter the Incorta URL https://incorta.com/incorta. Select Next.
+Select Permit everyone, then Next.
+Select Next.
+Select Finish.
+Select the relying parts in the left panel and the relying party you created and select properties in the right panel.
+Select the Advance tab, then SHA-1 in Secure hash algorithm.
+Select the Endpoint tab.
+Select Add.
+Select SAML logout as the endpoint type and enter a URL in the format https://<server-name>/incorta/logout.jsp?rediredtUrl=.  In the Trusted URL field and the Response URL field.
+Select Add Claim.
+Select Send LDAP Attributes as Claim from Claim rule template and select Next.
+Enter a Claim rule name. From LDAP Attributes, select Display-Name and login name from the Outgoing claim type. Select Finish.
+B. The Incorta Configuration
+In Incorta, these steps are needed:
+Enable SSO for a Tenant
+Create a Configuration file and refer to it in the Incorta Server.xml file
+Modify server.xml to refer to the configuration file.
+Restart Incorta.
+1. Enable SSO for a Tenant
+Enable Tenant for single sign-on can be done using any of the two alternatives:
+The administration screen (Incorta Admin UI)
+Navigate to Incorta Admin UI
+Select the Tenants tab.
+Select a Tenant.
+Using the tmt command line
+For incorta 3.x
+./tmt.sh  --update-property <tenantname> sso-login-enable true
+Example: ./tmt.sh  --update-property demo sso-login-enable true
+For incorta 4.x
+./tmt.sh  --clnm <CLUSTER_NAME> --update-property <tenantname> sso-login-enable true
+Example: ./tmt.sh -clnm  localCluster  --update-property demo sso-login-enable true
+2. Create a Configuration file
+Below is a sample configuration file.
+Change the following properties:
+onelogin.saml2.sp.entityid: the value of the ""relying identifier"" in ADFS.
+onelogin.saml2.sp.assertion_consumer_service.url: The value of Relying party SAML 2.0 SSO Service URL in ADFS.
+Follow this format: https://<incorta-server>/incorta/!<tenant-name>/
+onelogin.saml2.sp.single_logout_service.url: A URL formatted like this: http:///<incortaHostName>/incorta/logout.jsp?rediredtUrl=.
+onelogin.saml2.idp.entityid: The value of the entityID attribute in ADFS metadata file (can be found in the following URL https://<adfs-server>/FederationMetadata/2007-06/FederationMetadata.xml).
+onelogin.saml2.idp.single_sign_on_service.url: The value https://<adfs-server>/adfs/ls/idpinitiatedsignon.aspx.
+onelogin.saml2.idp.single_logout_service.url: The value https://<adfs-server>/adfs/ls/?wa=wsignout1.0 .
+onelogin.saml2.idp.x509cert: The value of ""X509Certificate"" in ADFS metadata file (can be found in the following URL https://<adfs-server>/FederationMetadata/2007-06/FederationMetadata.xml).
+Fields highlighted in B are customer-specific.
+------ Beginning of the File   /home/incorta/IncortaAnalytics/sso/ssoDemoConf.properties     --------
+# If 'strict' is True, then the Java Toolkit will reject unsigned
+# or unencrypted messages if it expects them signed or encrypted
+# Also will reject the messages if not strictly follow the SAML
+onelogin.saml2.strict = false
+# Enable debug mode (to print errors)
+onelogin.saml2.debug = true
+# Service Provider Data that we are deploying
+#
+# Identifier of the SP entity (must be a URI)
+onelogin.saml2.sp.entityid = https://localhost:8443/incorta
+# Specifies info about where and how the <AuthnResponse> message MUST be
+# returned to the requester, in this case our SP.
+# URL Location where the <Response> from the IdP will be returned
+onelogin.saml2.sp.assertion_consumer_service.url = https://localhost:8443/incorta/!demo/
+# SAML protocol binding to be used when returning the <Response>
+# message. Onelogin Toolkit supports for this endpoint the
+# HTTP-POST binding only
+onelogin.saml2.sp.assertion_consumer_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+# Specifies info about where and how the <Logout Response> message MUST be
+# returned to the requester, in this case our SP.
+onelogin.saml2.sp.single_logout_service.url = https://localhost:8443/incorta/logout.jsp?rediredtUrl=.
+# SAML protocol binding to be used when returning the <LogoutResponse> or sending the <LogoutRequest>
+# message. Onelogin Toolkit supports for this endpoint the
+# HTTP-Redirect binding only
+onelogin.saml2.sp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+# Specifies constraints on the name identifier to be used to
+# represent the requested subject.
+# Take a look on lib/Saml2/Constants.php to see the NameIdFormat supported
+#onelogin.saml2.sp.nameidformat = urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified
+# Usually x509cert and privateKey of the SP are provided by files placed at
+# the certs folder. But we can also provide them with the following parameters
+onelogin.saml2.sp.x509cert =
+# Requires Format PKCS#8 BEGIN PRIVATE KEY 
+# If you have PKCS#1 BEGIN RSA PRIVATE KEY convert it by openssl pkcs8 -topk8 -inform pem -nocrypt -in sp.rsa_key -outform pem -out sp.pem
+onelogin.saml2.sp.privatekey =
+# Identity Provider Data that we want connect with our SP
+#
+# Identifier of the IdP entity (must be a URI)
+onelogin.saml2.idp.entityid =http://adcs-setup.adfs.incortaops.com/adfs/services/trust
+# SSO endpoint info of the IdP. (Authentication Request protocol)
+# URL Target of the IdP where the SP will send the Authentication Request Message
+onelogin.saml2.idp.single_sign_on_service.url = https://adcs-setup.adfs.incortaops.com/adfs/ls/idpinitiatedsignon.aspx
+onelogin.saml2.security.want_nameid = false
+# SAML protocol binding to be used when returning the <Response>
+# message. Onelogin Toolkit supports for this endpoint the
+# HTTP-Redirect binding only
+onelogin.saml2.idp.single_sign_on_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+#if the above did not work try the below
+#onelogin.saml2.idp.single_sign_on_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST
+# SLO endpoint info of the IdP.
+# URL Location of the IdP where the SP will send the SLO Request
+#onelogin.saml2.idp.single_logout_service.url = https://incorta-dev.onelogin.com/trust/saml2/http-redirect/slo/610260
+onelogin.saml2.idp.single_logout_service.url = https://adcs-setup.adfs.incortaops.com/adfs/ls/?wa=wsignout1.0
+# Optional SLO Response endpoint info of the IdP.
+# URL Location of the IdP where the SP will send the SLO Response. If left blank, same URL as onelogin.saml2.idp.single_logout_service.url will be used.
+# Some IdPs use a separate URL for sending a logout request and response, use this property to set the separate response url
+onelogin.saml2.idp.single_logout_service.response.url =
+# SAML protocol binding to be used when returning the <Response>
+# message. Onelogin Toolkit supports for this endpoint the
+# HTTP-Redirect binding only
+onelogin.saml2.idp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+# Public x509 certificate of the IdP
+onelogin.saml2.idp.x509cert =MIIC+DCCAeCgAwIBAgIQX9WgOmjAEaZNmklZTc3SQzANBgkqhkiG9w0BAQsFADA4MTYwNAYDVQQDEy1BREZTIFNpZ25pbmcgLSBhZGNzLXNldHVwLmFkZnMuaW5jb3J0YW9wcy5jb20wHhcNMTgwNTA4MTIwMTU0WhcNMTkwNTA4MTIwMTU0WjA4MTYwNAYDVQQDEy1BREZTIFNpZ25pbmcgLSBhZGNzLXNldHVwLmFkZnMuaW5jb3J0YW9wcy5jb20wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDXIDkbU5gl6fsUweG7D5eft2nxADEEY/II4qCyB7fVxYrlQ9BnUlZ8HnyicgUjCUmHb1BMEPcU76kb4AW8XUCWVFGrUP+NZEXhPFHNZH6nAXxgOxh0eMajMBu12XQN0KvvJdYGbqmAZ3TFWqBCF0tnn/cUY6W1PjNHRAj71jHDlGTTCzRvR4Yhtr3cZVaHP7CHXL9upUBN+4ZvlfXHSIs2YOJVaACZRla1/IzPttp/wOAHrF7K3L7+vHrqngOF6pjOJa56hfX+9clb+UfgvzJZ69rg2mur8VHH93tTOn0qrCvdtA9OfMmtl0eYv8+CgqVQwNHvuLWYu9qiehjsg+NPAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAJ5oTrV0DqT13Ldijoc5K7KqUvfHNj2p8xzVzcEFpU1az3gCnqUe0DJWLXg5R3QvSRMXTs2Qpjee6TPI/Zcd3aRh0rZhThWsJktBFtdVvrPZZ57F8MQoX390HcZqRm5jO72O6tHjQAwruXGs2bZb76MOCpZHXS6XQorz7VZKFPktuHxcWqBldFdoDd9PCYsu8+uqRhwOLEXA369c9MnTRFITnUTTflHbFlNRukdFlEhoO67I0w6EYyLsjm/tWnKYEflQun58ImNA258n46vz7s2KN9EBy9uarxl+ONxg8hhWrCUMd/eN85LrWC+2+ll/0zPQ6dGGZDfV1Ot3enYGldY=
+# Instead of use the whole x509cert you can use a fingerprint
+# (openssl x509 -noout -fingerprint -in ""idp.crt"" to generate it,
+# or add for example the -sha256 , -sha384 or -sha512 parameter)
+#
+# If a fingerprint is provided, then the certFingerprintAlgorithm is required in order to
+# let the toolkit know which Algorithm was used. Possible values: sha1, sha256, sha384 or sha512
+# 'sha1' is the default value.
+# onelogin.saml2.idp.certfingerprint = 
+# onelogin.saml2.idp.certfingerprint_algorithm = sha1
+# Security settings
+#
+# Indicates that the nameID of the <samlp:logoutRequest> sent by this SP
+# will be encrypted.
+onelogin.saml2.security.nameid_encrypted = false
+# Indicates whether the <samlp:AuthnRequest> messages sent by this SP
+# will be signed. [The Metadata of the SP will offer this info]
+onelogin.saml2.security.authnrequest_signed = false
+# Indicates whether the <samlp:logoutRequest> messages sent by this SP
+# will be signed.
+onelogin.saml2.security.logoutrequest_signed = false
+# Indicates whether the <samlp:logoutResponse> messages sent by this SP
+# will be signed.
+onelogin.saml2.security.logoutresponse_signed = false
+# Sign the Metadata
+# Empty means no signature, or comma separate the keyFileName and the certFileName
+onelogin.saml2.security.want_messages_signed =
+# Indicates a requirement for the <samlp:Response>, <samlp:LogoutRequest> and
+# <samlp:LogoutResponse> elements received by this SP to be signed.
+onelogin.saml2.security.want_assertions_signed = false
+# Indicates a requirement for the Metadata of this SP to be signed.
+# Right now supported null (in order to not sign) or true (sign using SP private key) 
+onelogin.saml2.security.sign_metadata = false
+# Indicates a requirement for the Assertions received by this SP to be encrypted
+onelogin.saml2.security.want_assertions_encrypted = false
+# Indicates a requirement for the NameID received by this SP to be encrypted
+onelogin.saml2.security.want_nameid_encrypted = false
+# Authentication context.
+# Set Empty and no AuthContext will be sent in the AuthNRequest,
+# Set comma separated values urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Password
+#onelogin.saml2.security.requested_authncontext = urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Password
+#onelogin.saml2.security.requested_authncontext = urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:unspecified,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Password,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:TLSClient,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:X509,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:federation:authentication:windows,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos
+#onelogin.saml2.security.requested_authncontext = urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Password,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:TLSClient,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:X509,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:federation:authentication:windows,urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos
+onelogin.saml2.security.requested_authncontext = urn:oasis:names:tc:SAML:2.0:ac:classes:Password,urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport,urn:oasis:names:tc:SAML:2.0:ac:classes:TLSClient,urn:oasis:names:tc:SAML:2.0:ac:classes:X509,urn:federation:authentication:windows,urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos
+# Allows the authn comparison parameter to be set, defaults to 'exact'
+#onelogin.saml2.security.requested_authncontextcomparison = exact
+onelogin.saml2.security.requested_authncontextcomparison = minimum
+# Indicates if the SP will validate all received xmls.
+# (In order to validate the xml, 'strict' and 'wantXMLValidation' must be true).
+onelogin.saml2.security.want_xml_validation = true
+# Algorithm that the toolkit will use on signing process. Options:
+# 'http://www.w3.org/2000/09/xmldsig#rsa-sha1'
+# 'http://www.w3.org/2000/09/xmldsig#dsa-sha1'
+# 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256'
+# 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha384'
+# 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha512'
+onelogin.saml2.security.signature_algorithm = http://www.w3.org/2000/09/xmldsig#rsa-sha1
+# Organization
+onelogin.saml2.organization.name = SP Java 
+onelogin.saml2.organization.displayname = SP Java Example
+onelogin.saml2.organization.url = http://sp.example.com
+# Contacts
+onelogin.saml2.contacts.technical.given_name = Technical Guy
+onelogin.saml2.contacts.technical.email_address = technical@example.com
+onelogin.saml2.contacts.support.given_name = Support Guy
+onelogin.saml2.contacts.support.email_address = support@@example.com
+--------- End of File ------------
+3. Modify Incorta server.xml
+Modify server.xml to add the following tag at the beginning of <Host> tag:
+For incorta 3.x , the Server.xml  is located in <incorta home>/server/Conf) to add the following tag at the beginning of <Host> tag
+For incorta 4.x , the Server.xml is located on the Analytic Service  at <incorta_home>/IncortaNode/services/<service_id>/conf
+```
+<Valve className=""com.incorta.sso.valves.OneLoginValve""
+confFilesMap=""Tenant_Name=Absolute_Path,Tenant_Name2=Absolute_Path2""
+LoggingEnabled = ""true""
+/>
+```
+Where:
+Tenant_Name is the name of Incorta Tenant
+Absolute_Path is the path of the SSO configuration file
+LoggingEnabled  This flag turns on the valve logging messages. By default, it's false which mean the logging is turned off
+Example  :
+<Valve className=""com.incorta.sso.valves.OneLoginValve""
+confFilesMap=""demo=/home/incorta/IncortaAnalytics/sso/ssoDemoConf.properties""
+LoggingEnabled = ""true""
+/>
+4. Restart Incorta
+For Incorta 3.x, Restart incorta service
+For Incorta 4.x, the analytic service needs to be restarted
+Verify the connection
+Launch incorta URL for the SSO enabled tenant
+https://server_ip:https_port/incorta/!tenant_name/
+ex:
+https://localhost:8443/incorta/!demo/
+Since incorta is a non microsoft application a login popup form is shown at the first time login only
+known Issues
+ADFS Supported Browsers
+ADFS property called “WIASupportedUserAgents”. Which means the supported browsers that are allowed for WIA(Windows Integrated Authentication). If your users will be using an IE Edge or the newer version of Chrome, you will need to this additional step in The ADFS Configuration after step 9
+Run the following in PowerShell:
+Set-ADFSProperties -WIASupportedUserAgents @(""MSIE 6.0"", ""MSIE 7.0"", ""MSIE 8.0"", ""MSIE 9.0"", ""MSIE 10.0"", ""MSIE 11.0"", ""Trident/7.0"", ""MSIPC"", ""Windows Rights Management Client"", ""Mozilla/5.0"")
+Then restarted the ADFS service.
+For more information please refer to this article
+ADFS: Enable Single Sign-on (SSO) for Edge and Chrome browser
+Related articles
+https://www.vspbreda.nl/nl/ms-office/office-365/solved-adfs-enable-single-sign-on-sso-for-edge-and-chrome-browser/
+Page:
+Inspector Executor
+Page:
+Automatic Table Selection
+Page:
+How To Change The Thread Pool Used for ETL Steps
+Page:
+Geminga
+Page:
+Supporting Multi Source data"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/3583770625/Integrating+Azure+Active+Directory+AzureAD+as+SAML2+SSO+IdP,"Integrating Azure Active Directory (AzureAD) as SAML2 SSO IdP
+Overview
+This document will walk us through configuring Azure Active Directory as a SAML2 SSO identity provider (IdP) and enabling SSO settings in Incorta.
+Incorta has “Azure AD“ as an authentication type. However, it is different in the login experience; If “Azure AD“ is selected as an authentication type, they user will always be prompt to enter their tenant/username/password credentials in Incorta’s login screen. But if we configure Azure AD as a SAML2 IdP the user will login directly to Incorta as long as they are logged in to their IdP.
+For more information, please refer to the following ticket. Azure AD Support
+The screenshots in this document might change from the time this document is written.
+Azure AD Configurations
+log in to the Azure portal (Home - Microsoft Azure) and make sure you have one of the following roles (Global Administrator, or Application Administrator) to access the Azure active directory and create and configure enterprise applications. You should be able to see something like the following screenshot(s)
+click on “Azure Active Directory“ and from the right, select “Enterprise applications“
+From “Enterprise applications“ click on “New application“
+in the Gallery, type “Saml toolkit“ and select “Azure AD SAML Toolkit“
+Give a readable name for your application
+The application should be created successfully and you should be able to see something like the following screenshot. Click on “get started“ link in “Setup Single sign on” and choose SAML
+Edit the “Basic SAML configuration” section by adding the proper URLs as indicated below. Replace the provided URLs with the actual Incorta ones, including the tenant name.
+Edit the “Attributes and claims” section to add a custom claim named “loginName“ like the following screenshots. Make sure that the “Source attribute“ matches the login name field for the Incorta user
+Download the certificate (the Base64) on and save it, as we will need it when we apply the configuration on Incorta side. Any text editor can open the downloaded certificated and should look as follows:
+cat Incorta_Sample_Integration_base64.cer
+-----BEGIN CERTIFICATE-----
+Omiitteddd......
+EylNaWNyb3NvZnQgQXp1cmUgRmVkZXJhdGVkIFNTTyBDZXJ0aWZpY2F0ZTAeFw0yMzA2MTIxOTU0
+MTNaFw0yNjA2MTIxOTU0MTJaMDQxMjAwBgNVBAMTKU1pY3Jvc29mdCBBenVyZSBGZWRlcmF0ZWQg
+U1NPIENlcnRpZmljYXRlMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAp31KAYgKnbyx
+f4K2cweRbu4eQwnTW7ntut0SRtX9NHmqtY1gC/mRAPc1raus9s1FclyPyaTo2iBu6WB42fQrNjB5
+ItVivEYOcS4tSVzuQ/WplrXcz8NkT2Zi87v+6WVm9e+R1wPSMDwIbPOoNuAKhUFTh6zEVvxwsIkk
+.....Omitted...
+-----END CERTIFICATE-----
+Copy the following URLs, as we are going to need them when configuring Incorta
+Configuring Incorta
+You must prepare the following properties on a text editor
+for the value of the onelogin.saml2.idp.x509cert copy the content of the downloaded certificate without the “BEGIN CERTIFICATE“ and “END CERTIFICATE“ lines. Also, make sure that the certificate text is on a single line
+onelogin.saml2.strict = false
+onelogin.saml2.sp.entityid = <the configured entity Id>
+onelogin.saml2.sp.assertion_consumer_service.url = <the configured assertion consumer URL>
+onelogin.saml2.sp.assertion_consumer_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.sp.single_logout_service.url = <incorta-url>/logout.jsp?redirectUrl=.
+onelogin.saml2.sp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.entityid = <Azure AD Identifier copied form the previous step>
+onelogin.saml2.idp.single_sign_on_service.url = <login URL copied form the previous step>
+onelogin.saml2.security.want_nameid = false
+onelogin.saml2.idp.single_sign_on_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.single_logout_service.url = <logout URL copied from the previous step>
+onelogin.saml2.idp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.x509cert= <the value of the certificated downloaded>
+The following is a sample configuration:
+#### local configurations
+onelogin.saml2.strict = false
+onelogin.saml2.sp.entityid = https://localhost:8080/incorta/!demo/
+onelogin.saml2.sp.assertion_consumer_service.url =  http://localhost:8080/incorta/!demo/
+onelogin.saml2.sp.assertion_consumer_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.sp.single_logout_service.url = http://localhost:8080/incorta//logout.jsp?redirectUrl=.
+onelogin.saml2.sp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.entityid = https://sts.windows.net/a232729b-8cb8-4828-9941-72bbea9749d3/
+onelogin.saml2.idp.single_sign_on_service.url = https://login.microsoftonline.com/a232729b-8cb8-4828-9941-72bbea9749d3/saml2
+onelogin.saml2.security.want_nameid = false
+onelogin.saml2.idp.single_sign_on_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.single_logout_service.url = https://login.microsoftonline.com/a232729b-8cb8-4828-9941-72bbea9749d3/saml2
+onelogin.saml2.idp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.x509cert= MIIC8DCCAdigAwIBAgIQXvNUiAiIdJBPHFbu6+AZeDANBgkqhkiG9w0BAQsFADA0MTIwMAYDVQQDEylNaWNyb3NvZnQgQXp1cmUgRmVkZXJhdGVkIFNTTyBDZXJ0aWZpY2F0ZTAeFw0yMzA1MTAwNzM0MDFaFw0yNjA1MTAwNzM0MDFaMDQxMjAwBgNVBAMTKU1pY3Jvc29mdCBBenVyZSBGZWRlcmF0ZWQgU1NPIENlcnRpZmljYXRlMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqfyiQA/Ki3A5Rgw2IHeN8HfHYRxnTNk94Ms4qP3Hq9oAmO/Cr9vlWZ/OmnuPDW7CS3xwJI3IYnIfVo7GAIZb/4G9vDyc6ZzzMOGptEayQIXVUe9xC59RzIJRp5otFYvSvICzKgeTmph+1W0ekTK4Q8qsMpapdGEoYdvGujpyRL7uF/zFoqjq7M5+UngimuuSTNukYGsnto+5juXQBV2diV0MzjPkcCXqaoEobg7oGN2EPlMyXWrG9cA+yeLTNCIB/AOAvfzMmvE0gRqrtuAWvKw0UK+DNKQUtlxxX9vJpIu02bcs3iuMNLSb0KVFajD0rNCZpGkOuvtrLEM4Az8TeQIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQAJWbE/FXYNOh2uEbnkL+k2EcNw1kxUMlv8V4b6VaXT1pRGEOgw+oTMVcVTDvfGFwntrGLoqHoEjHCRR7/DlbmZJpMFHT/MI0/F6ki39cWzUOR+9U+pEUcrm01wwjS2H04Dn37OZOFfVrT00thoqEiWpPd8fYRCt2+wgaBcgBcOvXw6rA3NHufAKXhziDt2LEMgoQev7XHJ15egp+z92LmvxGF/HjdsHH8wzhA3SRfxTwPvPCNze9xcXCmzHm4hlE9+qUVnrFtxgkiKNldQk9i3Xrv6DLAW5WAKXflSBqRvtDyIjuot23HKomr5tEkftpbC/x/vzeO2DG+Gb6GWtOVP
+Login to CMC and select the tenant’s configuration
+Make sure that the Authentication type is “SSO“ and the “Provider Type“ is “SAML2“. Paste the configurations from the previous step into “Provider configurations“
+Additional configurations (Optional)
+You can enable “Auto provision SSO users“ and select the “Auto provisioned SSO users group“ if you want users logging in from SSO to be automatically added to Incorta. If “Auto provision SSO users“ is disabled, you will need to manually create users in Incorta in order to let them sign in."
+https://incorta.atlassian.net/wiki/spaces/INC/pages/2898887219/Okta+OneLogin+Auth0+Setup+Instructions,"Okta & OneLogin & Auth0 Setup Instructions
+How to configure Okta and Onelogin and Auth0 from the CMC UI
+Okta Provider
+OneLogin (SAML2) Provider
+Auth0 provider
+Okta Provider
+1- Configure Okta App, then download the metadata
+Configure the OKTA APP by following the instructions here, from the step 1 to 25.
+NOTE: Instructions starting step 26 are for old releases only and not supported in current releases.
+2- Prepare the metadata XML
+Update the XML, add the following tags between the md:EntityDescriptor
+<configuration>
+<default>{entityID}</default>
+<applications>
+<application>
+<md:EntityDescriptor>
+.............
+</md:EntityDescriptor>
+</application>
+</applications>
+</configuration>
+make sure that you copy the entityId url in the <md:EntityDescriptor> and replace it with {entityID} in the <default> tag
+Copy the XML and paste it into an online XML formatter. You can use this one for example: https://www.freeformatter.com/xml-formatter.html 
+
+So eventually your XML should look something like this:
+3- Enable the SSO, then Select the Okta provider from the dropdown list at security tab in the tenant configurations in CMC
+4-Restart Analytics and Loader services 
+Navigate to CMC → Clusters → localCluster → Nodes
+NOTE: Must restart Analytics and Loader services after changing Authentication Type.
+5- Copy the XML you edited in step 2 and paste it in the Provider configurations section, then click the Save button
+6-Auto provision: 
+When on, SSO user assigned in step 23 here can login without being assigned in Incorta.
+NOTE: If Auto provision is on, and a user is created in Incorta with the same email as the SSO user’s email, the SSO user will not be able to sign in and an error will occur when trying to sign in.
+When off, SSO user assigned in step 23 here can login after creating an SSO user in Incorta by Navigating to Incorta Analytics → Security tab → create a user with same email assigned in step 23 here.
+
+7- Now, you can log in to Incorta using Incorta’s URL followed by “!<tenant_name>“ (Example: http://localhost:8080/incorta/!demo/)
+OneLogin (SAML2) Provider
+1- Configure the Onelogin app, then download the metadata
+Navigate to Onelogin.com and select “Free Trial”
+Fill in your information to start the free trial, and you will receive an email with a link to activate your account.
+Navigate to Applications tab → Add App → search for SAML
+Select “SAML Custom Connector (Advanced)”
+Then select save in this window:
+Navigate to Configuration → ACS (Consumer) URL Validator* -> and write your <environment link>/!<Tenant_Link>
+example: https://jan22.cloudstaging.incortalabs.com/incorta/!saml/
+Navigate to Configuration -> ACS (Consumer) URL* -> -> and write your <environment link>/!<Tenant_Link>
+example: https://jan22.cloudstaging.incortalabs.com/incorta/!saml/
+Navigate to Parameters → Select “Configured by admin”
+Select “+” → Write “loginName” in Field Name → enable “Include in SAML assertion” → Click Save → Write “Email” in Value → Click Save
+Navigate to Users → Make sure your user is added.
+Note: If not added, search your email you used to sign up with in the search bar and add it
+Navigate to Privileges → search your name in the search bar and click on “check” to add it
+Now to download the Metadata, click on More Actions → SAML Metadata
+2- Map the metadata XML to the following properties file
+Copy the following properties file into a notepad/editor .
+onelogin.saml2.strict =  false
+onelogin.saml2.debug =  true
+onelogin.saml2.sp.entityid = https://app.onelogin.com/saml/metadata/d0e2e45f-b581-46da-adeb-98ae0184c16f
+onelogin.saml2.sp.assertion_consumer_service.url = https://sso-ui-hz.clouddev3.incortalabs.com/incorta/!demo/
+onelogin.saml2.sp.assertion_consumer_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST
+onelogin.saml2.sp.single_logout_service.url = https://sso-ui-hz.clouddev3.incortalabs.com/incorta/!demo/#/logout.jsp
+onelogin.saml2.sp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.sp.nameidformat = urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified
+onelogin.saml2.sp.x509cert =
+onelogin.saml2.sp.privatekey =
+onelogin.saml2.idp.entityid = https://app.onelogin.com/saml/metadata/d0e2e45f-b581-46da-adeb-98ae0184c16f
+onelogin.saml2.idp.single_sign_on_service.url = https://hz-incorta.onelogin.com/trust/saml2/http-redirect/sso/d0e2e45f-b581-46da-adeb-98ae0184c16f
+onelogin.saml2.idp.single_sign_on_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.single_logout_service.url = https://hz-incorta.onelogin.com/trust/saml2/http-redirect/slo/1471495
+onelogin.saml2.idp.single_logout_service.response.url =
+onelogin.saml2.idp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.x509cert=MIID5TCCAs2gAwIBAgIUJW+0F17lWAY/20lE4I37sC+SMFowDQYJKoZIhvcNAQEFBQAwSDETMBEGA1UECgwKaHotaW5jb3J0YTEVMBMGA1UECwwMT25lTG9naW4gSWRQMRowGAYDVQQDDBFPbmVMb2dpbiBBY2NvdW50IDAeFw0yMTA2MTQwMDM0MDZaFw0yNjA2MTQwMDM0MDZaMEgxEzARBgNVBAoMCmh6LWluY29ydGExFTATBgNVBAsMDE9uZUxvZ2luIElkUDEaMBgGA1UEAwwRT25lTG9naW4gQWNjb3VudCAwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDsMLtdWd+cn833XJZRRpODJupolDmXF1/vG2jcrgEIzzbk+8Cd2SqpP6HP476I1OSghjpZfLP3up0U7mo09EotfL2JbbpUySiuRV0VxJ8EEiOdZMH9k0zS8D/lBfvQPxNEna+xwuYducR8cE4F3agqgPCUJ4EVK4xThX1ZBPlvJbFD9lfIkYaiLbjzjuUrkAaERwwwia5MnmALbDWh7xd6j0xieOlY6e4V4ot1JFOnpiwZCZo6NWs9YhSKgAuqMQWW9vXIJMtseZgb7oOkiN3BhtzUXHBpzZhY3NYMI11cDg5IPz5lpPozWFJ+j4x9rulnwKl2sALyBRLx0HJ8lyIHAgMBAAGjgcYwgcMwDAYDVR0TAQH/BAIwADAdBgNVHQ4EFgQUzf699As4sDmXw7Duj+I+ftvzSv4wgYMGA1UdIwR8MHqAFM3+vfQLOLA5l8Ow7o/iPn7b80r+oUykSjBIMRMwEQYDVQQKDApoei1pbmNvcnRhMRUwEwYDVQQLDAxPbmVMb2dpbiBJZFAxGjAYBgNVBAMMEU9uZUxvZ2luIEFjY291bnQgghQlb7QXXuVYBj/bSUTgjfuwL5IwWjAOBgNVHQ8BAf8EBAMCB4AwDQYJKoZIhvcNAQEFBQADggEBAIA/MvqAkRsvDpamd8Df3aDfR3Ng8Z/UDvTDp0+OfZCbRt69O8AvkTk3OQZBfUr7Cs05b4UEjB4R1R3IQCBU9W8rOGupqMWnv0+XHXzC6JXRAPgzQ51zp5d7V4ApFfqCUQC6kUBxZnngYpUEvPgGe32i0vJscqXRSuhSLfJBQO1JO9SduRFnLnSkYAFrl+H3uniUGemkYt+FdoF2c9zHJQt1tDunqLhqF1E6r+eXOdTezUrQIDmS4O2nz+XRhR4KSAq6KwE7veXergGsftEzSHKa2Y/ewHE1RzzjsfNnVCRA4VL6Rdv+/0OAJ5bZiMyz9XEkqXD2195PNS11AQYncu0=
+onelogin.saml2.security.nameid_encrypted = false
+onelogin.saml2.security.authnrequest_signed = false
+onelogin.saml2.security.logoutrequest_signed = false
+onelogin.saml2.security.logoutresponse_signed = false
+onelogin.saml2.security.want_messages_signed =
+onelogin.saml2.security.want_assertions_signed = false
+onelogin.saml2.security.sign_metadata =
+onelogin.saml2.security.want_assertions_encrypted = false
+onelogin.saml2.security.want_nameid_encrypted = false
+onelogin.saml2.security.requested_authncontext = urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Password
+onelogin.saml2.security.onelogin.saml2.security.requested_authncontextcomparison = exact
+onelogin.saml2.security.want_xml_validation = true
+onelogin.saml2.security.signature_algorithm = http://www.w3.org/2000/09/xmldsig#rsa-sha1
+onelogin.saml2.organization.name = SP Java
+onelogin.saml2.organization.displayname = SP Java Example
+onelogin.saml2.organization.url = http://sp.example.com
+onelogin.saml2.contacts.technical.given_name = Technical Guy
+onelogin.saml2.contacts.technical.email_address = technical@example.com
+onelogin.saml2.contacts.support.given_name = Support Guy
+onelogin.saml2.contacts.support.email_address = support@@example.com
+Copy the entity Id link from metadata and replace it with the links in line 3 and line 11 of the properties file (replace the link only not the whole line).
+Write your environment link followed by /!<Tenant_Name>/ in onelogin.saml2.sp.assertion_consumer_service.url in line 4 instead of the current link.
+example: https://jan22.cloudstaging.incortalabs.com/incorta/!saml/
+In line 6, replace the logout link with your environment link: replace this part:
+https://sso-ui-hz.clouddev3.incortalabs.com/incorta/!demo/
+with your link and don’t forget to replace “demo” in the link with your tenant name
+Copy the sso http redirect link from the metadata file and paste it line 12 of the properties file (replace the link only not the whole line)
+Copy the slo http redirect link from the metadata file and paste it in line 14 of the properties file 
+(replace the link only not the whole line).
+Copy the certificate from the metadata
+Remove all spaces in the certificate using this online editor: Remove All Whitespace , and paste the edited certificate in line 17 of the properties file. (replace the link only not the whole line).
+3- Enable the SSO, then Select the SAML2 provider from the dropdown list at security tab at CMC
+4- Set the Onelogin configurations at the Provider configurations section by pasting the properties file we edited in step 2, then click the Save button
+5-Restart Analytics and Loader services 
+Navigate to CMC → Clusters → localCluster → Nodes
+NOTE: Must restart Analytics and Loader services after changing Authentication Type.
+6-Auto provision: 
+When on, SSO user assigned in step 23 here can login without being assigned in Incorta.
+NOTE: If Auto provision is on, and a user is created in Incorta with the same email as the SSO user’s email, the SSO user will not be able to sign in and an error will occur when trying to sign in.
+When off, SSO user assigned in step 23 here can login after creating an SSO user in Incorta by Navigating to Incorta Analytics → Security tab → create a user with same email assigned in step 23 here.
+7- Now, you can log in to Incorta using Incorta’s URL followed by “!<tenant_name>“ (Example: http://localhost:8080/incorta/!demo/)
+Auth0 provider
+1- Configure Auth0 App, then prepare the configurations
+you can find the instructions here, Define Incorta as a new application in Auth0 section
+2- Map the App configurations to the following properties
+appDomain=hz-dev-incorta.us.auth0.com
+clientId=y9c52Wfp94WL2wjbV4i09oGTk9MjMOTL
+clientSecret=r0qOHR73Xp5kSq3L2aXvI_E5ESEboJLsgheSwz6kk8mQ44yXLAnsYKNsH6qDpmIB
+callbackURL=https://sso-ui-hz.clouddev3.incortalabs.com/incorta/!demo/callback
+embdeddedURL=https://sso-ui-hz.clouddev3.incortalabs.com/incorta/!demo/embedded
+claimName=http://incorta.com/email
+audience=https://sso-ui-hz.clouddev3.incortalabs.com/incorta/!demo
+logoutReturnToURL=https://sso-ui-hz.clouddev3.incortalabs.com/incorta/!demo
+3- Enable the SSO, then Select the Auth0 provider from the dropdown list at security tap at CMC
+4- Set the properties at the Provider configurations section, then click the Save button
+5- Now, you can log in to Incorta using Incorta’s URL followed by “!<tenant_name>“ (Example: http://localhost:8080/incorta/!demo/)"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/2423128081/Pega+Simulator+Technical+Documentation,"Pega Simulator [Technical Documentation]
+Pega Simulator:
+It’s a simulator for the MOMRA customer validation service.
+Contains 3 endpoints in com.incorta.pega.webapi.PegaServlet in incorta.simulators project.
+Pega Simulator workflow:
+1- The home page → /incorta.simulators/pega/home
+2- When clicking on (GO TO INCORTA), will go to the second endpoint →/incorta.simulators/pega/incorta
+to prepare the Incorta request with the expected cookie
+3- The last one is the validation endpoint → /incorta.simulators/pega/validate
+The expected request body:
+{
+""RequestData"":{
+""RequestorID"": {UserLoginName:UserStatus}
+}
+}
+The response body will be:
+{
+""ID"":{loginName},
+""Status"": [Active| Inactive | Invalid]
+}"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/1763213371/Single-sign+on+SSO,"Single-sign on (SSO)
+Introduction
+Why Incorta needs to support SSO for user authentication?
+General workflow for SSO integration
+Prerequisites for enabling SSO authentication
+Configure SSO provider
+Configure Incorta
+Update the tenant’s Authentication Type
+Introduction
+Single sign-on or (SSO) for short, is an authentication scheme that allows a user to log in with a single ID and password to any of several related, yet independent, software systems. check this link for more information.
+Typically this scheme is accomplished using 2 popular standard protocols, SAML & OAuth2.0. Although OAuth is mainly used for access delegation i.e. allowing internet users to grant access to their information for websites and applications, it can be used as an SSO provider. We will see how that is accomplished but not in this document.
+Why Incorta needs to support SSO for user authentication?
+Many of Incorta’s customers already use an identity management system that holds all enterprise employees' information in one place. having a central repository for all employees' data makes it easier to provision those employees, enable/disable application access to certain employees, etc.
+Instead of having users typing their usernames/passwords to access Incorta, Incorta can integrate with the customer’s identity management system (SSO provider) to handle user authentication.
+General workflow for SSO integration
+The following diagram explains the interaction between Incorta, the identity provider, and the user’s browser
+1- The user browses to Incorta, typically from their browser.
+2- Incorta checks if there is an existing user session, if not, the user is redirected to the identity provider to login.
+3- The browser redirects the user to the identity provider and asks the user for credentials if necessary.
+4- If the user is authenticated successfully, the identity provider redirects back to Incorta along with a token representing the user’s identity (username, email, etc.).
+5- The user’s identity sent from the identity provider is verified by Incorta and if the user exists access to Incorta is granted and the user is redirected to Incorta’s landing page.
+Prerequisites for enabling SSO authentication
+Configure SSO provider
+You need to refer to the SSO/identity provider on how to define Incorta as an application
+Configure Incorta
+You will need to update the server.xml for the analytics service with the appropriate Valve configuration based on the identity provider you are integrating with, below is a sample for OktaValve
+<Valve className=""com.incorta.sso.valves.OktaValve""
+confFilesMap=""demo_49=/path/to/okta/config/file/demo_okta.xml""
+LoggingEnabled=""true"" />
+For development environment, the server.xml should be under /Servers/node/services/analytics_service/conf
+For Incorta installation, the server.xml should be under /path/to/incorta-node/services/analytics-service-uuid/conf. to know the exact path for the analytics service, run ./listServices.sh script which lists all available services along with their types under this node.
+You will need to make sure that the appropriate jar file is present under /path/to/incorta-node/runtime/lib and other SSO-related jars are removed.
+For Okta and Auth0, make sure that incorta-sso.jar is present and incorta-onelogin.valv.jar is removed
+For Onelogin and other SAML-based SSO providers, make sure that incorta-onelogin.valv.jar is present and incorta-sso.jar is removed.
+For Apple’s DS Auth, make sure that apple-dsauth.jar is present and both (incorta-sso.jar, incorta-onelogin.valv.jar) are removed.
+Note: Starting Incorta 5.0.x all three jar files can exist together so you do not need to manually remove any jar files.
+Update the tenant’s Authentication Type
+This can be performed by CMC or TMT
+from CMC, navigate to the tenant’s security configurations and update the authentication type to SSO as the screenshot below:
+and make sure to click on the “Save“ button below
+From TMT (our beloved command-line tool )
+navigate to /path/to/cmc/tmt and execute the following command:
+./tmt.sh -clnm <cluster_name> -u <tenant_name> sso-login-enable true"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/3001582387/SSO+FAQ,"SSO FAQ
+Q: Does the application support SAML 2.0, OAuth/OpenID Protocol.
+A: We support SAML 2.0, OpenID/OAuth2, Azure AD and native LDAP.
+SAML 2.0
+Q: What is SAML Consumer URL to post Assertion (Across All Environments)
+A: The Incorta URL followed by “!<tenant_name>“ (Example: http://<incorta_base_url>/incorta/!demo/).
+Q: Application URL/Service Provider Start URL (Across All Environments)
+A: The Incorta URL followed by “!<tenant_name>“ (Example: http://<incorta_base_url>/incorta/!demo/).
+Q: Provide a list of attributes to be sent as claims in the assertion.
+A: Only one attribute
+loginName: Its the value that identifies a user in Incorta (Ex: email or login name).
+Which SAML flows does the application support (IDP Init, SP Init (Redirect/Post)).
+A: Both.
+Does the application need a cert public key, thumbprint, serial?
+A: Cert public key (to be safe we need to download the metadata file downloaded from the SSO provider, this is explained in depth in our documentation).
+Q: Authentication fallback support?
+A: No
+OAuth2.0
+We only support (OAuth2.0 through Auth0).
+Client Redirect URI
+The Incorta URL followed by “!<tenant_name>” (Example: http://<incorta_base_url>/incorta/!demo/callback)
+Scopes: In case of Auth0 (OpenID, profile, email).
+We support logout functionality."
+https://incorta.atlassian.net/wiki/spaces/INC/pages/903676912/SSO+Login+doesn+t+work+as+expected,"SSO Login doesn't work as expected
+Goal:
+Trying to login to Incorta using SSO
+The issue:
+The customer cannot log in to Incorta using the SSO ADFS Azure and redirect it to the HTTP page.
+The customer asked to log in with the password again after sync with the SSO account
+The reason:
+The customer does not follow our regular process/assumption that SSO users are created via DirSync.
+After the users are created from the Incorta UI, the regular Incorta password policy check blocked those users by setting as dirty.
+When we manually switch a user from an Incorta owned user to an SSO user, we need to change both User Type and Dirty Flag from the backend.
+users imported from LDAP will have the type as configured in the LDAP.properties file, so if you want to import then as internal you can change it. Type =1 means they will be authenticated against the LDAP, not incorta.
+Solution
+Those users(SSO USers/LDAP Users) already should have Type =1, dirtyflag=0 and update those values from the back-end through Incorta Metadata.
+Related Topics
+https://incorta.zendesk.com/agent/tickets/6275
+https://incorta.zendesk.com/agent/tickets/6069
+Important Jira:
+INC-12967 - Ignore DirtyFlag for SSO and LDAP enabled tenants Resolved"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/1975386166/SSO+Okta+valve+internals,"SSO Okta valve internals
+code walkthrough:
+Class OktaValve extends BaseValve which extends ValveBase from catalina
+the method that gets invoked in the Valve when a request is made is invoke()
+first it extract the URL which the request is sent to in incorta and then extracts the tenant name attached with the URL and converts it to lowercase
+then checkForInterruptions() method is called which if returned true then it calls processValve() which is an abstract method implemented in all classes implementing the BaseValve class
+checkForInterruptions() method checks if the the path is secure checkIsSecure() by checking if the path starts with /authservice , /service , /embedded , /# , /callback or equals /, /index.html, /mobile-auth.html or the request has a parameter relayTo
+the checks if the SSO is enabled for that tenant by checking if the JVM have property set called <tenantName>.sso-login-enable which its value is set during the server startup
+Note that in OktaValve we don’t have access to Incorta classes hence we can’t get the value of the column sso-enabled from the tenant table from the database
+in Tenant class constructor the system property key <tenantName>.sso-login-enable is set to be read later in the Valves
+processValve method implementation in OktaValve
+it checks if there is a session or not using function getContext
+assume that the user hasn’t logged in yet so the User doesn’t have session yet
+checks if there is a parameter in the request called SAMLResponse in case the user hasn’t logged in yet in Okta the it shall be null
+redirectToSSO method is called, it gets the URL to redirect to Okta and adds the relayState to it
+after the user gets redirected to Okta and authenticate in Okta, the user gets redirected back to incorta and the request should contain SAMLResponse which contains the user LoginName sent from Okta
+if the SAMLResponse doesn’t contain LoginName then there is a problem and shall redirect again to SSO (Okta)
+if the SAMLResponse contains LoginName then create a Principal which is a user defined for tomcat then process the next valve.
+after all values gets invoked then doFilter function inAuthFilter gets invoked which checks if there is session exists for the current user
+if the user doesn’t have Session checks if the tenant in URL has SSO enabled then calls loginSSO function which calls AuthServlet.loginSSO which calls AuthServlet.login and creates session for the user"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/1715503123/SSO+Okta+valve+overview,"SSO Okta valve overview
+quick overview:
+the following sequence diagram shows okta workflow of authenticating users in Incorta using Okta
+note that OktaValve is defined in tomcat so its not defined in the application level in tomcat hence it doesn’t have access to incorta classes because OktaValve exists in jar outside the jar of incorta which have advantages and disadvantages.
+Advantages is that separated the SSO implementation from incorta so if there is any implementation change in customers you can send it to jar incorta/sso but you don't need to generate a new build.
+Disadvantage is that it’s not able to use incorta classes in OktaValve for example you can’t get context in OktaValve.
+Okta login workflow:
+The user enters incorta url attached with the tenant in the url to the browser then OktaValve checks if the user have an active session or not in current case the user doesn’t have session then checks for SAML response if exists in this case the SAML response doesn’t exist in request then OktaValve constructs the URL. and the SAML request that will be send to okta and redirects the browser to that URL with status code 302
+Okta application checks if the user have an active session in okta in this case the user doesn’t have active session in okta then it returns to the browser by the login page of okta
+The user submits the username and password to okta successfully then okta create a new session and then okta tells the browser to redirect to the SSO url configured in okta application which is the incorta URL with tenant attached and adding to it SAML response
+When accessing incorta again then OktaValve is invoked and checks if it has an internal active session in incorta which in this case the user doesn’t have internal session in incorta so it checks if the request have SAML response then decodes the SAML response and extract from it the loginName of the user and adds it to the request and passes the Valve to proceed to incorta.
+The first class in incorta that runs is AuthFilter the checks if the url containing the tenant then its from the SSO and checks if there is a session if not then checks if the tenant included in the URL exists and is SSO enabled then it calls AuthServlet.loginSSO which takes the request and response and gets the loginName from the request and creates a session for the user with the attached LoginName
+The next time any request is passed to tomcat, OktaValve get invoked and checks if the user have internal active session then it passes the user to incorta."
+https://incorta.atlassian.net/wiki/spaces/INC/pages/3635675330/WSO2+Integration,"WSO2 Integration
+Install WSO2 Server
+Configure SAML Provider
+Configure Incorta SSO
+Install WSO2 Server
+1- If you don’t have a WSO2 server, you can download it from https://wso2.com/identity-server/
+2- Follow these steps to install and setup it https://is.docs.wso2.com/en/latest/get-started/sample-use-cases/set-up/
+Configure SAML Provider
+1- Log in to the Management Console (https://<WSO2-server-url>/carbon)
+2- Navigate to Main > Identity > Service Providers and click Add.
+3- Enter the Service Provider Name text box, for example, incorta-sso, and click Register.
+4- In the Claim Configuration section, click Define Custom Claim Dialect, then click Add Claim URI
+a- Set Service Provider Claim: loginName
+b- Set Local Claim: a unique user identifier (should match the login name field for the Incorta user), for example, HTTP://wso2.org/claims/emailaddress
+c- Select the following checkboxes:
+- Requested Claim
+- Mandatory Claim
+5- In the Inbound Authentication Configuration section, click Configure under the SAML2 Web SSO Configuration section.
+Now set the configuration as follows:
+a- Issuer: incorta-sso.com
+b- Assertion Consumer URL: https://IncortaUrl/!<tenantName>, then click Add
+ex: https://hz-test.uswest.cloudstaging.incortalabs.com/incorta/!default/
+c- Select Enable Response Signing checkbox
+d- Select Enable Single Logout, Then set the Incorta logout URL 
+like https://hz-test.uswest.cloudstaging.incortalabs.com/incorta/!default/#/logout.jsp
+and select the logout method Front-Channel Logout (HTTP Redirect Binding)
+e- Select Enable Attribute Profile, and Include Attributes in the Response Always
+6- Then Click Download IDP Metadata, to download the metadata XML
+7- Click Register to save the changes, Then click Update.
+Configure Incorta SSO
+1- In CMC, Navigate to your tenant configuration > Security 
+2- Set Authentication Type SSO
+3- Set Provider type SAML2
+4- From the metadata XML, prepare the following configs
+onelogin.saml2.strict =  false
+onelogin.saml2.debug =  true
+onelogin.saml2.sp.entityid = <Issuer value>
+onelogin.saml2.sp.assertion_consumer_service.url = <the configured assertion consumer URL>
+onelogin.saml2.sp.assertion_consumer_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST
+onelogin.saml2.sp.single_logout_service.url = <incorta-Logout-url>
+onelogin.saml2.sp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.sp.nameidformat = urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified
+onelogin.saml2.idp.entityid = <Issuer value>
+onelogin.saml2.idp.single_sign_on_service.url = <login URL in SingleSignOnService tag in xml>
+onelogin.saml2.idp.single_sign_on_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.single_logout_service.url = <logout URL in SingleLogoutService tag in xml>
+onelogin.saml2.idp.single_logout_service.response.url = <logout URL in SingleLogoutService tag in xml>
+onelogin.saml2.idp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.x509cert= <the value of the X509Certificate tag in xml>
+onelogin.saml2.security.nameid_encrypted = false
+onelogin.saml2.security.authnrequest_signed = false
+onelogin.saml2.security.logoutrequest_signed = false
+onelogin.saml2.security.logoutresponse_signed = false
+onelogin.saml2.security.want_messages_signed =
+onelogin.saml2.security.want_assertions_signed = false
+onelogin.saml2.security.want_assertions_encrypted = false
+onelogin.saml2.security.want_nameid_encrypted = false
+onelogin.saml2.security.requested_authncontext = urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Password
+onelogin.saml2.security.onelogin.saml2.security.requested_authncontextcomparison = exact
+onelogin.saml2.security.want_xml_validation = true
+onelogin.saml2.security.signature_algorithm = http://www.w3.org/2000/09/xmldsig#rsa-sha1
+The following is a sample configuration
+onelogin.saml2.strict =  false
+onelogin.saml2.debug =  true
+onelogin.saml2.sp.entityid = incorta-sso.com
+onelogin.saml2.sp.assertion_consumer_service.url = https://hz-test.uswest.cloudstaging.incortalabs.com/incorta/!default/
+onelogin.saml2.sp.assertion_consumer_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST
+onelogin.saml2.sp.single_logout_service.url = https://hz-test.uswest.cloudstaging.incortalabs.com/incorta/!default/#/logout.jsp
+onelogin.saml2.sp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.sp.nameidformat = urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified
+onelogin.saml2.idp.entityid = incorta-sso.com
+onelogin.saml2.idp.single_sign_on_service.url = https://localhost.com:9443/samlsso
+onelogin.saml2.idp.single_sign_on_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.single_logout_service.url = https://localhost.com:9443/samlsso
+onelogin.saml2.idp.single_logout_service.response.url = https://localhost.com:9443/samlsso
+onelogin.saml2.idp.single_logout_service.binding = urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect
+onelogin.saml2.idp.x509cert=MIIDqTCCApGgAwIBAgIEYfEVSjANBgkqhkiG9w0BAQsFADBkMQswCQYDVQQGEwJVUzELMAkGA1UECAwCQ0ExFjAUBgNVBAcMDU1vdW50YWluIFZpZXcxDTALBgNVBAoMBFdTTzIxDTALBgNVBAsMBFdTTzIxEjAQBgNVBAMMCWxvY2FsaG9zdDAeFw0yMjAxMjYwOTMyNThaFw0yNDA0MzAwOTMyNThaMGQxCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJDQTEWMBQGA1UEBwwNTW91bnRhaW4gVmlldzENMAsGA1UECgwEV1NPMjENMAsGA1UECwwEV1NPMjESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAkdgncoCrz655Lq8pTdX07eoVBjdZDCUE6ueBd0D1hpJ0/zE3x3Az6tlvzs98PsPuGzaQOMmuLa4qxNJ+OKxJmutDUlClpuvxuf+jyq4gCV5tEIILWRMBjlBEpJfWm63+VKKU4nvBWNJ7KfhWjl8+DUdNSh2pCDLpUObmb9Kquqc1x4BgttjN4rx/P+3/v+1jETXzIP1L44yHtpQNv0khYf4j/aHjcEri9ykvpz1mtdacbrKK25N4V1HHRwDqZiJzOCCISXDuqB6wguY/v4n0l1XtrEs7iCyfRFwNSKNrLqr23tR1CscmLfbH6ZLg5CYJTD+1uPSx0HMOB4Wv51PbWwIDAQABo2MwYTAUBgNVHREEDTALgglsb2NhbGhvc3QwHQYDVR0OBBYEFH0KQ3YTZJxTsNsPyrZOSFgXXhG+MB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjALBgNVHQ8EBAMCBPAwDQYJKoZIhvcNAQELBQADggEBAFNJ34CIiIlCxmyp27+KA224LaHVtL5DucFK0P22FQ+QKkONiUwO70KoVFreBH1Smxu4ePWk6rMZFOM5oL8HXYg3twy+5eGcL3PQd7X5dwAqlVivzokoi6SDaA/bIG6J/O1U9Qd4XEVJdVuLqjk1+cp70ALt0X6B7sNLfjFcbz3jQULNnK8HNvqbn7zQuP10s8p5y2qVkPBA/pjigRDsIWR6p78QESF+TaHFjxfcD6f9cnYie+yEHERtG8k8x5jLFe+odI1/QGZP8Fy0oKT+E/TJ1FBh4rB1FtKylqGeauPu89DnaJ9+kvpNQ94yFmEuhtDByvDijxAqvlin3TPIfy8=
+onelogin.saml2.security.nameid_encrypted = false
+onelogin.saml2.security.authnrequest_signed = false
+onelogin.saml2.security.logoutrequest_signed = false
+onelogin.saml2.security.logoutresponse_signed = false
+onelogin.saml2.security.want_messages_signed =
+onelogin.saml2.security.want_assertions_signed = false
+onelogin.saml2.security.want_assertions_encrypted = false
+onelogin.saml2.security.want_nameid_encrypted = false
+onelogin.saml2.security.requested_authncontext = urn:oasis:names:tc:SAML:2.0:ac:classes:urn:oasis:names:tc:SAML:2.0:ac:classes:Password
+onelogin.saml2.security.onelogin.saml2.security.requested_authncontextcomparison = exact
+onelogin.saml2.security.want_xml_validation = true
+onelogin.saml2.security.signature_algorithm = http://www.w3.org/2000/09/xmldsig#rsa-sha1
+5- Click Save."

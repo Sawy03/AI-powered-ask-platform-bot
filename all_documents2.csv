@@ -1,0 +1,210 @@
+filename,text
+https://incorta.atlassian.net/wiki/spaces/INC/pages/1476591900/Authentication+Authorization+acquiring+Access+Refresh+Tokens,"Authentication/Authorization & acquiring Access/Refresh Tokens
+The first step you need to follow to start consuming Incorta’s public REST APIs is to request an access token.
+This access token will be passed as a request header when trying to access any public REST endpoint exposed by Incorta except for the following endpoints:
+/api/v1/tokens => which is used for access/refresh token generation.
+/api/v1/tokens/refresh => which is used to refresh and existing pair of access/refresh tokens.
+The following diagram shows the process for requesting access/refresh token pairs:
+From the above diagram, the steps to generate access/refresh token pair is as follows:
+The application developer issues an HTTP POST request to /api/v1/tokens with a request body containing
+“tenantName” is the name of the tenant that the user belongs to
+“loginName” is the username used by the user to login to Incorta
+“requestHash” is the hex string representation of the output bytes from the sha256 hashing algorithm of the API Key + the current timestamp in milliseconds (sha256(api_key + timestamp))
+“timestamp” is the timestamp used in creating the “requestHash” in milliseconds
+Request body:
+{
+""tenantName"": ""string"",
+""loginName"": ""string"",
+""requestHash"": ""string"",
+""timestamp"": long
+}
+for steps on how to generate an API key click here
+If the API key is valid, and the timestamp is within the allowed window, Incorta will respond with access/refresh tokens pair & and an HTTP response status code 201 (Created).
+The time window between the timestamp and calling the endpoint is configurable through the internal configuration public.apis.tokens.request.duration. The default value is 30 minutes.
+The tokens have expiry dates, access token expires after 10 mins & refresh token expires after 20 mins. For convenience, the expiry time for each token is returned to give a hint to the consumer when the tokens need to be refreshed.
+Response body:
+{
+""accessToken"": ""string"",
+""refreshToken"": ""string"",
+""type"": ""string"",
+""accessTokenExpiresAt"": ""2020-11-23T18:02:36.901Z"",
+""refreshTokenExpiresAt"": ""2020-11-23T18:02:36.901Z""
+}
+The consumer can start consuming any of the public REST APIs endpoints, for example, retrieving the data of a given insight by calling the endpoint & providing the access token as a bearer token in the “Authorization“ request header parameter.
+If the access token is expired or is invalid, Incorta will reject the request with HTTP status code 401.
+For an example of consuming the query insight endpoint click here.
+The user can refresh the expired access token and get new access and refresh tokens by calling /api/v1/tokens/refresh
+The user has to send the old access and refresh tokens in order to get new valid pairs, the access token could be expired but the refresh token has to be valid otherwise user will have to create new pairs using API key from /api/v1/tokens
+Request body:
+{
+""accessToken"": ""string"",
+""refreshToken"": ""string""
+}
+“accessToken” is the expired JWT token that the user wants to refresh
+“refreshToken” is the refresh token that was created with the access token, the refresh token has to be still valid (not expired).
+If the refresh token is still valid and the access token is authentic (generated and signed by incorta) the tokens will be refreshed successfully and the user will receive new access and refresh token pairs.
+Response body:
+{
+""accessToken"": ""string"",
+""refreshToken"": ""string"",
+""type"": ""string"",
+""accessTokenExpiresAt"": ""2020-11-23T18:02:36.901Z"",
+""refreshTokenExpiresAt"": ""2020-11-23T18:02:36.901Z""
+}"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/1925218324/Enable+API+Key+Generation+and+Create+API+Key,"Enable API Key Generation and Create API Key
+If you’re a user with super role or has access to incorta “Security” tab, Log in to Incorta and navigate to the “Security” tab.
+You’ll find a new column “API Key Generation” with either Enabled/Disabled value indicating whether the user has the ability to create API Key or not.
+Note: Any user with the super-user role will have API Key Generation always enabled as long as the super mode is enabled for the users’ tenant.
+Enabled means user can create/renew API Key and use public apis.
+Disabled means user can’t have API key or use public apis.
+You enable/disable API Key generation for users in 3 ways:
+1- Toggle the flag for multiple users at once
+Select the users you want to enable/disable the API Key Generation for them and press on the kebab menu in the top right corner and choose the action to perform on the selected users.
+Note: Any user with the super-user role will have API Key Generation always enabled as long as the super mode is enabled in the users’ tenant and will fail to change its flag with the following message.
+2- Toggle the flag for users inside multiple groups at once
+Navigate to the “Groups” tab and select the groups you want to change the API Key Generation for their members and press on the kebab menu in the top right corner and choose the action to perform on the selected users.
+Note: Any group with the super-user role will have API Key Generation always enabled for its users as long as the super mode is enabled for the groups’ tenant and will fail to change its users’ flag with the following message.
+3- Toggle the flag for a single user from the user profile tab
+Navigate to the security tab in the user profile, you will find a flag to enable/disable API Key Generation in the Developer Tool section.
+Any user will receive a notification mail whether he has the API Key Generation enabled or disabled for him.
+Note: in order to receive a notification, the user needs to logon to Incorta at least once.
+Creating API Key
+Any user with API Key Generation flag enabled for him can log in to Incorta, navigate to the security tab in his user profile and create API Key if it’s his first time or renew it if it exists.
+Note: User can have only one API Key."
+https://incorta.atlassian.net/wiki/spaces/INC/pages/1979547651/Performance+Stress+Testing,"Performance & Stress Testing
+Introduction
+In this document, we will share the performance/stress testing results performed while developing this feature.
+Epic link for reference https://incorta.atlassian.net/browse/INC-15333
+First attempt
+This was a basic performance bench-marking for the query insight endpoint.
+The test plan was the following:
+Prepare a table insight with 9M records total rows
+Perform 4 separate requests with the difference in the requested page size (returned rows). Page sizes used were 100K, 1M, 5M, and 9M rows
+We used this insight with the following credentials (ebs_cloud/admin/admin)
+Results"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/1400275081/Public+APIs+Home,"Public APIs Home
+YThis the home wiki page for the Public APIs project.
+Phase 1 related documents:
+Technical Design (Documentation is a WIP)
+Phase 1 (Documentation is a WIP)
+Authentication/Authorization & acquiring Access/Refresh Tokens
+Retrieving data for a given Incorta insight
+Further work (Not marked as a part of a particular phase)
+Data API
+Jira: https://incorta.atlassian.net/browse/INC-28651
+Docs: Data APIs Endpoints"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/1386186125/Public+APIs+Phase+1+-+Technical+Design,"Public APIs Phase 1 - Technical Design
+Authentication & Authorization
+How to acquire API Key and what it is used for?
+Using API Key to get access/refresh token (tokens endpoint)
+mention expected request & response.
+mention expected status codes and their meaning.
+mention that the access token is used to represent the user and will have the same access permission for the user.
+Refreshing access/refresh tokens (refresh endpoint)
+When to use it.
+Expected request & response.
+provide a diagram to illustrate the sequence of events.
+mention the Jira ticket for the epic.
+Retrieving the result set of a given insight
+mention expected:
+path parameters
+Header parameter [Authorization]
+add a sample for the current response"
+https://incorta.atlassian.net/wiki/spaces/INC/pages/1476559398/Retrieving+data+for+a+given+Incorta+insight,"Retrieving data for a given Incorta insight
+To retrieve the data for a given insight you need the following:
+A Valid access token.
+The dashboard GUID.
+The insight GUID.
+The request body. (Optional)
+Request:
+POST https://<hostname>:<port>/incorta/api/v1/dashboards/<dashboard_GUID>/insights/<insight_GUID>/query
+HTTP HEADER: ""Authorization"": ""Bearer <your-access-token>""
+Additionally, you can add the following request body:
+If there is no request body present, the defaults will be used, the defaults are:
+The startRow/pageSize will be 0, 1000 respectively.
+Request Body:
+{
+""prompts"": [
+{
+""field"": ""string"",
+""operator"": ""="",
+""values"": [
+""string""
+],
+""options"": {
+""caseSensitive"": true
+},
+""type"": ""dimension"",
+""variable"": ""string""
+}
+],
+""pagination"": {
+""startRow"": 0,
+""pageSize"": 0
+},
+""username"": ""base64.encode(loginName)""
+}
+“username” in the request payload is optional but, when present the insight data will be queried as if this user is the user calling the endpoint. This is similar to the user impersonation feature that can be done from Incorta UI so, same as impersonation, the endpoint caller should have a super role to be able to query insight data of other users.
+Note: username in the request payload is the base64 encoded value of the login name used to login to Incorta
+Response Sample:
+Below is a sample for the expected response from Incorta:
+{
+""response"": {
+""headers"": {
+""apiVersion"": 1, // refers to the current API version
+""totalRows"": 2000,
+""dimentions"": [
+{
+""columnName"": ""dim1"",
+""dataType"": ""string"",
+""label"": """",
+""type"": ""col/row"", // used to distinguish between pivot tables/normal 2D tables
+""index"": 0 // the position of this column in the data row
+}
+],
+""measures"": [
+{
+""columnName"": ""schema.measure_col1"",
+""dataType"": ""integer"",
+""label"": ""some lable"",
+""index"": 1,
+""grandTotal"": 10000
+}
+]
+},
+""data"": [
+[""string1"", 123],
+[...]
+]
+}
+}
+“data” it’s a 2D array where the first index represents the row number and the second index for the position of column or measure in that row
+“columnName” is the fully qualified name for the column (schemaName.tableName.columnName)
+""dataType"" is the data type of the column inside incorta
+""label"" is the label name given to the column
+“headers.dimensions.type”  is the type of the dimension whether “col” or “row” (to distinguish between grouping dimensions in case of aggregated tables like Pivot Table)
+“Index” is the position of the dimension or header in the 2nd dimension of the array
+“grandTotal” is the total sum of the measure
+As seen in the request above, the dashboard could have a prompt. The endpoint /api/v1/dashboards/{dashboadGUID}/prompts is available to call with the access token in the request header authorization to get the dashboard promp
+Request:
+POST https://<hostname>:<port>/incorta/api/v1/dashboards/<dashboard_GUID>/prompts
+HTTP HEADER: ""Authorization"": ""Bearer <your-access-token>""
+Response Body:
+{
+""prompts"": [
+{
+""dataType"": ""string"",
+""field"": ""string"",
+""function"": ""dimension"",
+""label"": ""string"",
+""operator"": ""string"",
+""defaultValues"": [
+""string""
+],
+""values"": [
+""string""
+],
+""variable"": ""string""
+}
+]
+}"
