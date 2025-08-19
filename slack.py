@@ -3,7 +3,8 @@ from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
-from rag_pipeline import get_bot_response_with_context
+# from rag_pipeline import get_bot_response_with_context
+from qa_rag_pipeline import get_bot_response_with_context
 
 # Load env variables
 load_dotenv()
@@ -108,7 +109,7 @@ def handle_message_events(body, say, client):
         
         # Handle direct messages or check if bot is mentioned
         if channel_type == "im" or "<@" in text:
-            if text.lower().__contains__("hello") or text.lower().__contains__("hi"):
+            if text.lower().split(" ").__contains__("hello") or text.lower().split(" ").__contains__("hi"):
                 reply_thread_ts = thread_ts or message_ts
                 say(text="Hi there! 👋 Ask me anything about the platform knowledge base!", 
                     thread_ts=reply_thread_ts)
@@ -158,7 +159,7 @@ def handle_app_mentions(body, say, client):
         print(f"🧹 Clean text: {clean_text}")
         
         if clean_text:
-            if clean_text.lower().__contains__("hello") or clean_text.lower().__contains__("hi"):
+            if clean_text.lower().split(" ").__contains__("hello") or clean_text.lower().split(" ").__contains__("hi"):
                 say(text=f"<@{user}> Hi there! 👋 How can I assist you with the platform knowledge base?", 
                     thread_ts=message_ts)
             else:
