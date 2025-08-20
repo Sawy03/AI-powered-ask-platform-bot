@@ -1,0 +1,1 @@
+pip install flask requests python-dotenv slack-bolt langchain langchain-core langchain-ollama langchain-chroma chromadb pandas

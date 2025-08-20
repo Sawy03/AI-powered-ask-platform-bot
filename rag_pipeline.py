@@ -4,6 +4,7 @@ from langchain_ollama.llms import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
 from vector2 import retrieval  # Your existing retrieval logic
 
+
 # Initialize model
 model = OllamaLLM(model="llama3.2:1b")
 
@@ -37,6 +38,8 @@ Be concise and helpful. If you don't have enough information, say so clearly.
 
 Knowledge Base Context: {context}
 Current Question: {question}
+put in your mind that I can not see the knowledge base i can only see this question {question} and this conversation history so i need a detailed sumarized answer i do not want you to list the context
+
 
 Answer:"""
 
@@ -47,6 +50,8 @@ Be concise and helpful. If you don't have enough information, say so clearly.
 
 Context: {context}
 Question: {question}
+put in your mind that I can not see the knowledge base i can only see this question {question} so i need a detailed sumarized answer i do not want you to list the context
+
 
 Answer:"""
 
