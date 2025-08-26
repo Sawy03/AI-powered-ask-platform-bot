@@ -1,5 +1,3 @@
-# qa_rag_pipeline.py
-
 from langchain_ollama.llms import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
 from smart_qa_tracker import SmartQATracker
@@ -7,6 +5,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
 
 # Initialize Smart Q&A Tracker
 smart_tracker = SmartQATracker(
@@ -16,11 +15,13 @@ smart_tracker = SmartQATracker(
     space_keys=os.getenv("CONFLUENCE_SPACE_KEYS", "").split(",") if os.getenv("CONFLUENCE_SPACE_KEYS") else None
 )
 
+
 # Get retriever from Smart Tracker for confluence Q&A
 retrieval = smart_tracker.get_retriever(
     k=5,
     score_threshold=0.6
 )
+
 
 # NEW: Get retriever for confident Q&A
 confident_retrieval = smart_tracker.get_confident_retriever(
@@ -28,8 +29,10 @@ confident_retrieval = smart_tracker.get_confident_retriever(
     score_threshold=0.6
 )
 
+
 # Initialize model
 model = OllamaLLM(model="llama3.2:1b")
+
 
 # Updated prompts for Q&A format
 template_with_context = """
@@ -56,6 +59,7 @@ put in your mind that I can not see the knowledge base i can only see this quest
 
 Answer:"""
 
+
 template_no_context = """
 You are a helpful AI assistant for the platform team's knowledge base. Answer questions based **ONLY** on the provided context.
 
@@ -70,11 +74,14 @@ I want the answer to be sumarized as possible and to the point
 **I want the answer to be from the context only** and dont make up anything
 Answer:"""
 
+
 prompt_with_context = ChatPromptTemplate.from_template(template_with_context)
 prompt_no_context = ChatPromptTemplate.from_template(template_no_context)
 
+
 chain_with_context = prompt_with_context | model
 chain_no_context = prompt_no_context | model
+
 
 def format_qa_context(docs) -> str:
     """Format Q&A documents for the prompt context"""
@@ -109,12 +116,13 @@ Answer: {answer}
     
     return "\n\n" + "="*50 + "\n\n".join(context_parts)
 
+
 def get_bot_response_with_context(message, thread_context=""):
     """Get response from Q&A RAG pipeline with priority on confident database"""
     try:
         print(f"🔍 Processing Q&A query: {message}")
         
-        # Step 1: First try confident Q&A retriever (vector similarity search)
+        # Step 1: First try confident Q&A retriever
         print("🎯 Searching confident Q&A database...")
         confident_docs = []
         confident_retrieval_failed = False
@@ -182,7 +190,6 @@ def get_bot_response_with_context(message, thread_context=""):
             print(f"❌ Error generating response: {llm_error}")
             return "Sorry, I encountered an error generating the response. Please contact <@U099C4LNDEC> for assistance."
         
-        # Add source information (modify to show if it's from confident or confluence)
         sources = []
         seen_pages = set()
         
@@ -220,6 +227,7 @@ def get_bot_response_with_context(message, thread_context=""):
         traceback.print_exc()
         return f"Sorry, I encountered an error processing your question. Please contact <@U099C4LNDEC> for assistance."
 
+
 def initialize_confident_qa_vector_store():
     """Initialize confident Q&A vector store with existing data and cleanup"""
     try:
@@ -237,9 +245,6 @@ def initialize_confident_qa_vector_store():
         import traceback
         traceback.print_exc()
 
-def get_bot_response(message):
-    """Get response from Q&A RAG pipeline (backward compatibility)"""
-    return get_bot_response_with_context(message, "")
 
 def initialize_confluence_qa_data(force_regenerate: bool = False):
     """
@@ -256,6 +261,7 @@ def initialize_confluence_qa_data(force_regenerate: bool = False):
     except Exception as e:
         print(f"❌ Error initializing Confluence Q&A data: {e}")
 
+
 def update_single_page_qa(page_id: str):
     """Update Q&A for a single page using smart tracking"""
     try:
@@ -264,9 +270,11 @@ def update_single_page_qa(page_id: str):
     except Exception as e:
         print(f"Error updating Q&A for page {page_id}: {e}")
 
+
 def show_qa_tracking_summary():
     """Show summary of Q&A tracking"""
     smart_tracker.show_tracking_summary()
+
 
 if __name__ == "__main__":
     # Test the Smart Q&A system
@@ -280,7 +288,3 @@ if __name__ == "__main__":
     
     # Show tracking summary
     show_qa_tracking_summary()
-    
-    # Test query
-    test_response = get_bot_response("How do I deploy the application?")
-    print(f"Test response: {test_response}")

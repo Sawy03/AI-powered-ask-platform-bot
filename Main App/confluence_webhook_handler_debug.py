@@ -1,5 +1,3 @@
-# confluence_webhook_handler_debug.py
-
 from flask import Flask, request, jsonify
 import json
 import threading
@@ -14,6 +12,7 @@ class ConfluenceWebhookHandler:
     def __init__(self, smart_tracker: SmartQATracker):
         self.tracker = smart_tracker
         
+
     def handle_webhook(self, payload: dict):
         """Handle incoming webhook from Confluence Automation"""
         try:
@@ -34,6 +33,7 @@ class ConfluenceWebhookHandler:
             print(f"❌ Error handling webhook: {e}")
             traceback.print_exc()
     
+
     def handle_page_created(self, payload: dict):
         """Handle page creation event from Confluence Automation"""
         try:
@@ -64,6 +64,7 @@ class ConfluenceWebhookHandler:
             print(f"Error handling page creation: {e}")
             traceback.print_exc()
     
+
     def handle_page_updated(self, payload: dict):
         """Handle page update event from Confluence Automation"""
         try:
@@ -94,6 +95,7 @@ class ConfluenceWebhookHandler:
             print(f"Error handling page update: {e}")
             traceback.print_exc()
     
+
     def handle_page_removed(self, payload: dict):
         """Handle page removal event from Confluence Automation"""
         try:
@@ -124,8 +126,10 @@ class ConfluenceWebhookHandler:
             print(f"Error handling page removal: {e}")
             traceback.print_exc()
 
+
 # Flask app for webhook endpoint
 webhook_app = Flask(__name__)
+
 
 # Initialize Smart Q&A Tracker
 smart_tracker = SmartQATracker(
@@ -135,7 +139,9 @@ smart_tracker = SmartQATracker(
     space_keys=os.getenv("CONFLUENCE_SPACE_KEYS", "").split(",") if os.getenv("CONFLUENCE_SPACE_KEYS") else None
 )
 
+
 webhook_handler = ConfluenceWebhookHandler(smart_tracker)
+
 
 @webhook_app.route('/qa/confident', methods=['GET'])
 def get_confident_qa():
@@ -149,6 +155,7 @@ def get_confident_qa():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
     
+
 @webhook_app.route('/qa/general', methods=['GET'])
 def get_general_qa():
     """Endpoint to retrieve all general Q&A pairs from the knowledge base"""
@@ -161,17 +168,16 @@ def get_general_qa():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+
 @webhook_app.route('/qa/confident/delete/<int:pair_id>', methods=['DELETE'])
 def delete_confident_qa_pair(pair_id):
     """Endpoint to delete a single Q&A pair by ID"""
     try:
-        # deleted_count = smart_tracker.delete_confident_qa_pair_by_id(pair_id)
-        # smart_tracker.cleanup_confident_vector_store()
-        threading.Thread(
-                    target=smart_tracker.delete_confident_qa_pair_by_id,
-                    args=(pair_id,)
-                ).start()
-        deleted_count = 1  # Assume success for threading
+        # threading.Thread(
+        #             target=smart_tracker.delete_confident_qa_pair_by_id,
+        #             args=(pair_id,)
+        #         ).start()
+        deleted_count = smart_tracker.delete_confident_qa_pair_by_id(pair_id)
         print("\n1. Cleaning database of invalid entries...")
         smart_tracker.clean_confident_database()
     
@@ -187,6 +193,7 @@ def delete_confident_qa_pair(pair_id):
         print(f"❌ Error deleting Q&A pair: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
 
 @webhook_app.route('/confluence/webhook', methods=['POST', 'GET'])
 def confluence_webhook():
@@ -282,6 +289,7 @@ def confluence_webhook():
             "type": type(e).__name__
         }), 500
 
+
 @webhook_app.route('/confluence/sync', methods=['POST'])
 def manual_sync():
     """Endpoint to manually trigger a full sync"""
@@ -304,6 +312,7 @@ def manual_sync():
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
+
 @webhook_app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -311,6 +320,7 @@ def health_check():
         "status": "healthy",
         "service": "Confluence Webhook Handler"
     }), 200
+
 
 @webhook_app.route('/test', methods=['GET', 'POST'])
 def test_endpoint():
@@ -328,8 +338,8 @@ def test_endpoint():
             "health_url": "/health"
         }), 200
 
+
 if __name__ == "__main__":
     print("🚀 Starting Enhanced Confluence Webhook Handler with Debugging...")
     print("🔍 Debug mode enabled - detailed logging active")
-    print("🧪 Test endpoint available at: /test")
     webhook_app.run(host="0.0.0.0", port=3001, debug=True)

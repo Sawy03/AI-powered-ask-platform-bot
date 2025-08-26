@@ -1,15 +1,12 @@
 import os
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-from slack_bolt import App
 from slack_bolt.adapter.flask import SlackRequestHandler
-# from rag_pipeline import get_bot_response_with_context
 from qa_rag_pipeline import get_bot_response_with_context
 import smart_qa_tracker
 from smart_qa_tracker import SmartQATracker
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
-import os
 
 # Load env variables
 load_dotenv()
@@ -21,6 +18,7 @@ APP_TOKEN = os.getenv("APP_TOKEN")
 # Initialize Slack Bolt app
 bolt_app = App(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 handler = SlackRequestHandler(bolt_app)
+
 
 # Flask app
 flask_app = Flask(__name__)
@@ -80,6 +78,7 @@ def get_thread_context(client, channel, thread_ts):
         print(f"❌ Error fetching thread context: {str(e)}")
         return ""
     
+
 def get_parent_message(client, channel, thread_ts):
     """
     Fetch only the parent message of a thread to provide as context.
@@ -133,7 +132,7 @@ def get_parent_message(client, channel, thread_ts):
         print(f"❌ Error fetching parent message: {str(e)}")
         return ""
     
-# Add root route to handle the 404 error
+
 @flask_app.route("/", methods=["GET", "POST"])
 def root():
     if request.method == "POST":
@@ -145,7 +144,8 @@ def root():
         return handler.handle(request)
     return "Platform Knowledge Bot is running! 🤖"
 
-# Respond to messages in channels with RAG integration
+
+# Respond to private messages
 @bolt_app.event("message")
 def handle_message_events(body, say, client):
     try:
@@ -157,7 +157,6 @@ def handle_message_events(body, say, client):
         message_ts = event.get("ts", "")
         thread_ts = event.get("thread_ts")  # This exists if message is in a thread
 
-
         # Debug logging
         print(f"📩 MESSAGE EVENT: {event}")
         print(f"📝 Text: {text}")
@@ -166,7 +165,6 @@ def handle_message_events(body, say, client):
         print(f"⏰ Message timestamp: {message_ts}")
         print(f"🧵 Thread timestamp: {thread_ts}")
 
-        
         # Ignore bot messages
         if event.get("bot_id"):
             print("🤖 Ignoring bot message")
@@ -213,7 +211,7 @@ def handle_message_events(body, say, client):
         print(f"❌ Error handling message: {str(e)}")
         say("Sorry, I encountered an error processing your message.")
 
-# Handle app mentions
+# Respond to mentions in channels
 @bolt_app.event("app_mention")
 def handle_app_mentions(body, say, client):
     try:
@@ -224,7 +222,6 @@ def handle_app_mentions(body, say, client):
         message_ts = event.get("ts", "")
         thread_ts = event.get("thread_ts")
 
-        
         # Debug logging
         print(f"🎯 APP MENTION EVENT: {event}")
         print(f"📝 Mention text: {text}")
@@ -248,9 +245,11 @@ def handle_app_mentions(body, say, client):
                 reply_thread_ts = thread_ts or message_ts
                 print(parent_message)
                 print(clean_text)
+                sawy2 = parent_message.replace("<@U099VBD9BR7>", "")
                 sawy = clean_text.lower().replace("correction", "")
+                print(sawy2)
                 print(sawy)
-                smart_tracker.save_confident_answer(parent_message, sawy)
+                smart_tracker.save_confident_answer(sawy2, sawy)
                 say(text=f"<@{user}> This question has been sent for correction!", 
                     thread_ts=reply_thread_ts)
             else:
@@ -276,15 +275,18 @@ def handle_app_mentions(body, say, client):
         print(f"❌ Error handling mention: {str(e)}")
         say("Sorry, I encountered an error.")
 
+
 # Health check
 @flask_app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "healthy"})
 
+
 # Slack events route
 @flask_app.route("/slack/events", methods=["POST"])
 def slack_events():
     return handler.handle(request)
+
 
 if __name__ == "__main__":
     handler = SocketModeHandler(bolt_app, APP_TOKEN)

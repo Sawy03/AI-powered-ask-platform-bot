@@ -1,5 +1,3 @@
-# smart_qa_tracker.py
-
 from ast import pattern
 import os
 import json
@@ -55,6 +53,7 @@ class SmartQATracker:
         self.tracking_db = "./page_tracking.db"
         self.init_tracking_db()
     
+
     def init_tracking_db(self):
         """Initialize SQLite database for tracking page versions and Q&A"""
         conn = sqlite3.connect(self.tracking_db)
@@ -104,7 +103,6 @@ class SmartQATracker:
         conn.close()
         print("📊 Tracking database initialized")
 
-    # Add these methods to your SmartQATracker class
 
     def get_confident_retriever(self, **kwargs):
         """Get retriever for the confident Q&A vector store with error handling"""
@@ -139,6 +137,7 @@ class SmartQATracker:
             # Return a dummy retriever that returns empty results
             return self._get_empty_retriever()
 
+
     def recreate_confident_vector_store(self):
         """Completely recreate the confident vector store from scratch"""
         try:
@@ -166,6 +165,7 @@ class SmartQATracker:
             print(f"❌ Error recreating confident vector store: {e}")
             import traceback
             traceback.print_exc()
+
 
     def sync_confident_qa_to_vector_store(self):
         """Sync existing confident Q&A pairs to vector store with validation"""
@@ -203,6 +203,7 @@ class SmartQATracker:
         print(f"✅ Synced {successful_syncs} confident Q&A pairs to vector store")
         if skipped_syncs > 0:
             print(f"⚠️ Skipped {skipped_syncs} invalid Q&A pairs")
+
 
     def _add_confident_qa_to_vector_store(self, qa_id: int, question: str, answer: str):
         """Add confident Q&A pair to vector store with comprehensive validation"""
@@ -257,6 +258,7 @@ class SmartQATracker:
             import traceback
             traceback.print_exc()
 
+
     def _get_empty_retriever(self):
         """Return a dummy retriever that always returns empty results"""
         class EmptyRetriever:
@@ -268,6 +270,7 @@ class SmartQATracker:
                 return []
         
         return EmptyRetriever()
+
 
     def clean_confident_database(self):
         """Clean the confident Q&A database of invalid entries"""
@@ -296,7 +299,6 @@ class SmartQATracker:
             self.recreate_confident_vector_store()
 
     
-    # New method to save the confident answer
     def save_confident_answer(self, original_question: str, corrected_answer: str):
         """
         Saves a user-provided answer to both the confident_qa_pairs table and vector store.
@@ -352,34 +354,6 @@ class SmartQATracker:
         self.recreate_confident_vector_store()
 
 
-
-    def get_confident_answer(self, question: str) -> Optional[str]:
-        """
-        Retrieves the most confident answer for a given question.
-        For simplicity, this uses a direct match. You could add fuzzy matching later.
-        """
-        conn = sqlite3.connect(self.tracking_db)
-        cursor = conn.cursor()
-        
-        # Use a LIKE query to find a matching question, ordered by confidence score
-        cursor.execute('''
-            SELECT corrected_answer 
-            FROM confident_qa_pairs 
-            WHERE original_question LIKE ?
-            ORDER BY confidence_score DESC
-            LIMIT 1
-        ''', (f'%{question}%',))
-        
-        result = cursor.fetchone()
-        conn.close()
-
-        if result:
-            print(f"✅ Found confident answer for '{question}'")
-            return result[0]
-        
-        print(f"❌ No confident answer found for '{question}'")
-        return None
-
     def get_confident_qa_pairs(self):
         """
         Retrieves all Q&A pairs from the confident_qa_pairs table.
@@ -431,6 +405,7 @@ class SmartQATracker:
         
         return qa_list
     
+
     def delete_confident_qa_pair_by_id(self, pair_id: int):
         """
         Deletes a single Q&A pair from both the confident_qa_pairs table AND vector store by its ID.
@@ -466,7 +441,7 @@ class SmartQATracker:
         
         return deleted_count
 
-    # Alternative method: Bulk cleanup for vector store (optional)
+
     def cleanup_confident_vector_store(self):
         """
         Clean up confident vector store to remove orphaned documents.
@@ -506,6 +481,7 @@ class SmartQATracker:
         except Exception as e:
             print(f"❌ Error cleaning up vector store: {e}")
 
+
     def get_page_tracking_info(self, page_id: str) -> Optional[Dict]:
         """Get tracking information for a page"""
         conn = sqlite3.connect(self.tracking_db)
@@ -536,6 +512,7 @@ class SmartQATracker:
             }
         return None
     
+
     def update_page_tracking(self, page_id: str, page_data: Dict, qa_count: int = 0):
         """Update tracking information for a page"""
         conn = sqlite3.connect(self.tracking_db)
@@ -562,6 +539,7 @@ class SmartQATracker:
         conn.commit()
         conn.close()
     
+
     def delete_page_qa_pairs(self, page_id: str):
         """Delete all Q&A pairs for a specific page from both tracking DB and vector store"""
         print(f"🗑️ Deleting existing Q&A pairs for page {page_id}")
@@ -587,6 +565,7 @@ class SmartQATracker:
         
         return len(vector_doc_ids)
     
+
     def record_qa_pairs(self, page_id: str, qa_pairs: List[Tuple[str, str]], vector_doc_ids: List[str]):
         """Record Q&A pairs in tracking database"""
         conn = sqlite3.connect(self.tracking_db)
@@ -602,6 +581,7 @@ class SmartQATracker:
         conn.commit()
         conn.close()
     
+
     def is_page_changed(self, page_id: str, current_version: int, current_content_hash: str) -> bool:
         """Check if a page has changed since last processing"""
         tracking_info = self.get_page_tracking_info(page_id)
@@ -621,6 +601,7 @@ class SmartQATracker:
         print(f"✅ Page {page_id} unchanged")
         return False
     
+
     def generate_qa_from_content(self, title: str, content: str) -> List[Tuple[str, str]]:
         """Generate Q&A pairs from content using LLM"""
         try:
@@ -684,6 +665,7 @@ Generated Q&A pairs:"""
             print(f"❌ Error generating Q&A for {title}: {e}")
             return []
     
+
     def extract_text_from_confluence_storage(self, storage_content: str) -> str:
         """Extract plain text from Confluence storage format"""
         import re
@@ -700,6 +682,7 @@ Generated Q&A pairs:"""
         
         return text
     
+
     def process_single_page(self, page: Dict, force_regenerate: bool = False) -> bool:
         """
         Process a single page: check if changed, delete old Q&A if needed, generate new Q&A
@@ -818,6 +801,7 @@ Generated Q&A pairs:"""
             print(f"❌ Error processing page {page.get('id', 'unknown')}: {e}")
             return False
     
+
     def get_spaces(self) -> List[Dict]:
         """Get all accessible spaces or specified spaces"""
         spaces = []
@@ -855,6 +839,7 @@ Generated Q&A pairs:"""
                 
         return spaces
     
+
     def get_pages_from_space(self, space_key: str) -> List[Dict]:
         """Get all pages from a specific space"""
         pages = []
@@ -890,6 +875,7 @@ Generated Q&A pairs:"""
                 
         return pages
     
+
     def sync_all_confluence_qa(self, force_regenerate: bool = False):
         """
         Sync all Confluence content to Q&A format with smart change detection
@@ -939,6 +925,7 @@ Generated Q&A pairs:"""
         # Show tracking summary
         self.show_tracking_summary()
     
+
     def update_single_page_smart(self, page_id: str):
         """Smart update for a single page (called by webhook)"""
         try:
@@ -966,6 +953,7 @@ Generated Q&A pairs:"""
         except Exception as e:
             print(f"❌ Error in smart update for page {page_id}: {e}")
     
+
     def show_tracking_summary(self):
         """Show summary of tracking database"""
         conn = sqlite3.connect(self.tracking_db)
@@ -988,7 +976,8 @@ Generated Q&A pairs:"""
         print(f"  📚 Spaces:")
         for space_name, count in space_stats:
             print(f"    - {space_name}: {count} pages")
-    
+
+
     def get_retriever(self, **kwargs):
         """Get retriever for the Q&A vector store"""
         search_kwargs = {
@@ -1001,7 +990,7 @@ Generated Q&A pairs:"""
             search_kwargs=search_kwargs
         )
 
-# Example usage
+
 if __name__ == "__main__":
     tracker = SmartQATracker(
         base_url=os.getenv("CONFLUENCE_BASE_URL"),
