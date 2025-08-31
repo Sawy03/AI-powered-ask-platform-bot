@@ -3,7 +3,6 @@ from langchain_core.prompts import ChatPromptTemplate
 from smart_qa_tracker import SmartQATracker
 import os
 from dotenv import load_dotenv
-
 load_dotenv()
 
 

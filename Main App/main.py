@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Production Main Entry Point for Platform Knowledge Bot
 Combines Slack Bot, Confluence Webhook Handler, and QA RAG Pipeline
