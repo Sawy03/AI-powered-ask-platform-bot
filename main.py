@@ -184,11 +184,16 @@ def get_thread_context(client, channel, thread_ts):
                     username = user_info.get("user", {}).get("real_name") or user_info.get("user", {}).get("name", "User")
                 except:
                     username = "User"
-                
-                thread_context.append(f"User ({username}): {text}")
-            elif bot_id:
                 clean_text = re.sub(r'<@[A-Z0-9]+>', '', text).strip()
-                clean_text = clean_text.replace("**", "")
+
+                thread_context.append(f"User: {clean_text}")
+            elif bot_id:
+                clean_text = clean_text.replace("Help us get better, please use the following emojis for answer" , " ")
+                clean_text = clean_text.replace(":+1: upvotes" , " ")
+                clean_text = clean_text.replace(":-1: downvotes" , " ")
+                clean_text = clean_text.replace("Disclaimer: If you have more questions related to the same topic please mention me in the thread using", " ")
+                clean_text = re.sub(r'<@[A-Z0-9]+>', '', text).strip()
+                clean_text = clean_text.replace("**", " ")
                 if clean_text:
                     thread_context.append(f"Bot: {clean_text}")
         
@@ -337,6 +342,10 @@ def handle_correction_command(ack, body, say, client):
 def handle_message_events(body, say, client):
     try:
         event = body.get("event", {})
+        message_ts = event.get("ts", "")
+        text = event.get("text", "")
+        channel = event.get("channel", "")
+        thread_ts = event.get("thread_ts")
         # Ignore bot messages
         if event.get("bot_id"):
             print("🤖 Ignoring bot message")
@@ -344,26 +353,36 @@ def handle_message_events(body, say, client):
         # Add a check to ignore messages that are app mentions, since they are handled by the app_mention event handler
         if "app_mention" in event.get("text", ""):
             return
-        text = event.get("text", "")
-        channel = event.get("channel", "")
-        message_ts = event.get("ts", "")
-        thread_ts = event.get("thread_ts")
+        # i want to skip if the message is in channel and in thread
+        if channel and thread_ts:
+            return
 
         print(f"✅ Processing message: {text}")
-        
+        if text.__contains__("<@U099VBD9BR7>"):
+            return
         if text.lower().split(" ").__contains__("hello") or text.lower().split(" ").__contains__("hi"):
             reply_thread_ts = thread_ts or message_ts
             say(text="Hi there! 👋 Ask me anything about the platform knowledge base!", 
                 thread_ts=reply_thread_ts)
-        elif text.lower().split(" ").__contains__("correction"):
+        elif text.lower().split(" ").__contains__("$correction"):
             parent_message = ""
             if thread_ts:
                 parent_message = get_parent_message(client, channel, thread_ts)
             reply_thread_ts = thread_ts or message_ts
-            sawy = text.lower().replace("correction", "")
+            sawy = text.lower().replace("$correction", "")
             smart_tracker.save_confident_answer(parent_message, sawy)
             say(text="This question has been sent for correction!", 
                 thread_ts=reply_thread_ts)
+        elif "$questionid" in text.lower():
+            # i want to get the id of this question from the database and return it to the user
+            print("Getting question ID...")
+            parent_message = ""
+            if thread_ts:
+                parent_message = get_parent_message(client, channel, thread_ts)
+            question_id = smart_tracker.get_question_id(parent_message)
+            reply_thread_ts = thread_ts or message_ts
+            if question_id:
+                say(text=f"The ID for this question is: {question_id}", thread_ts=reply_thread_ts)
         else:
             print("🔍 Getting RAG response...")
             thread_context = ""
@@ -391,11 +410,11 @@ def handle_app_mentions(body, say, client):
         message_ts = event.get("ts", "")
         thread_ts = event.get("thread_ts")
 
-        print(f"APP MENTION EVENT: {event}")
-        print(f"Mention text: {text}")
-        print(f"User: {user}")
-        print(f"Message timestamp: {message_ts}")
-        print(f"Thread timestamp: {thread_ts}")
+        # print(f"APP MENTION EVENT: {event}")
+        # print(f"Mention text: {text}")
+        # print(f"User: {user}")
+        # print(f"Message timestamp: {message_ts}")
+        # print(f"Thread timestamp: {thread_ts}")
         
         # Remove bot mention from text
         clean_text = re.sub(r'<@[A-Z0-9]+>', '', text).strip()
@@ -405,7 +424,7 @@ def handle_app_mentions(body, say, client):
             if "hello" in clean_text.lower() or "hi" in clean_text.lower():
                 say(text=f"<@{user}> Hi there! How can I assist you with the platform knowledge base?", 
                     thread_ts=message_ts)
-            elif "correction" in clean_text.lower():
+            elif "$correction" in clean_text.lower():
                 parent_message = ""
                 if thread_ts:
                     parent_message = get_parent_message(client, channel, thread_ts)
@@ -413,12 +432,22 @@ def handle_app_mentions(body, say, client):
                 print(parent_message)
                 print(clean_text)
                 sawy2 = parent_message.replace("<@U099VBD9BR7>", "")
-                sawy = clean_text.lower().replace("correction", "")
+                sawy = clean_text.lower().replace("$correction", "")
                 print(sawy2)
                 print(sawy)
                 smart_tracker.save_confident_answer(sawy2, sawy)
                 say(text=f"<@{user}> This question has been sent for correction!", 
                     thread_ts=reply_thread_ts)
+            elif "$questionid" in clean_text.lower():
+                # i want to get the id of this question from the database and return it to the user
+                print("Getting question ID...")
+                parent_message = ""
+                if thread_ts:
+                    parent_message = get_parent_message(client, channel, thread_ts)
+                question_id = smart_tracker.get_question_id(parent_message)
+                reply_thread_ts = thread_ts or message_ts
+                if question_id:
+                    say(text=f"<@{user}> The ID for this question is: {question_id}", thread_ts=reply_thread_ts)
             else:
                 print("Getting RAG response for mention...")
                 thread_context = ""
@@ -631,6 +660,24 @@ def get_general_qa():
         return jsonify(general_qa), 200
     except Exception as e:
         print(f"Error retrieving general Q&A pairs: {e}")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/qa/confident/update/<int:pair_id>', methods=['POST'])
+def update_confident_qa_pair(pair_id):
+    """Endpoint to update a single Q&A pair by ID"""
+    try:
+        data = request.json
+        answer = data.get("answer")
+
+        if not answer:
+            return jsonify({"error": "Answer is required"}), 400
+
+        smart_tracker.update_confident_qa_pair(pair_id, answer)
+        return jsonify({"status": "success", "message": f"Q&A pair with ID {pair_id} updated."}), 200
+
+    except Exception as e:
+        print(f"Error updating Q&A pair: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 

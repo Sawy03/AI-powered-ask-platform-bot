@@ -140,6 +140,7 @@ def get_bot_response_with_context(message, thread_context=""):
                     "context": context,
                     "question": message
                 })
+
             else:
                 result = chain_no_context.invoke({
                     "context": context,
@@ -155,7 +156,7 @@ def get_bot_response_with_context(message, thread_context=""):
         for doc in docs[:3]:
             try:
                 if doc.metadata.get('type') == 'confident_qa':
-                    source_info = "✅ Confident Answer from Slack"
+                    source_info = ""
                 else:
                     page_title = doc.metadata.get('page_title', 'Unknown')
                     space_name = doc.metadata.get('space_name', 'Unknown')
@@ -173,11 +174,13 @@ def get_bot_response_with_context(message, thread_context=""):
             except Exception as source_error:
                 print(f"⚠️ Error processing source info: {source_error}")
                 continue
-        
-        if sources:
+        print("result : " + result)
+        if sources and doc.metadata.get('type') != 'confident_qa':
             sources_text = f"\n\n📚 **Source Documents:**\n" + "\n".join([f"• {source}" for source in sources])
             result += sources_text
-        
+
+        text = "Help us get better, please use the following emojis for answer: \n\n👍 upvotes \n\n👎 downvotes \n\nDisclaimer: If you have more questions related to the same topic please mention me in the thread using <@U099VBD9BR7>"
+        result += "\n\n" + text
         return result
         
     except Exception as e:

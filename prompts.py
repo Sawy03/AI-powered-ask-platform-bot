@@ -22,7 +22,6 @@ put in your mind that I can not see the knowledge base i can only see this quest
 
 Answer:"""
 
-
 template_no_context = """
 You are a helpful AI assistant for the platform team's knowledge base. Answer questions based **ONLY** on the provided context.
 

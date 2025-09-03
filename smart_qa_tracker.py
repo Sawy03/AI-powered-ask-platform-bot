@@ -259,6 +259,44 @@ class SmartQATracker:
             import traceback
             traceback.print_exc()
 
+    def get_question_id(self, question: str) -> Optional[int]:
+        """Get the ID of a question from the confident_qa_pairs table"""
+        if not question or not question.strip():
+            print("⚠️ Cannot get question ID - question is empty")
+            return None
+        
+        question = question.strip()
+        
+        conn = sqlite3.connect(self.tracking_db)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT id FROM confident_qa_pairs WHERE original_question = ?', (question,))
+        print(f"Searching for question ID of: {question}")
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return result[0]
+        else:
+            print("⚠️ Question not found in database")
+            return None
+
+    def update_confident_qa_pair(self, qa_id: int, new_answer: str) -> bool:
+        """Update the answer of a confident Q&A pair by its ID"""
+        if not new_answer or not new_answer.strip():
+            print("⚠️ Cannot update confident answer - new answer is empty")
+            return False
+        
+        new_answer = new_answer.strip()
+        
+        conn = sqlite3.connect(self.tracking_db)
+        cursor = conn.cursor()
+
+        cursor.execute('UPDATE confident_qa_pairs SET corrected_answer = ?, timestamp = ? WHERE id = ?', (new_answer, int(time.time()), qa_id))
+        conn.commit()
+        conn.close()
+        print(f"✅ Updated confident Q&A pair {qa_id} with new answer")
+        return True
 
     def _get_empty_retriever(self):
         """Return a dummy retriever that always returns empty results"""
@@ -363,7 +401,7 @@ class SmartQATracker:
         cursor = conn.cursor()
         
         cursor.execute('''
-            SELECT id, original_question, corrected_answer FROM confident_qa_pairs
+            SELECT id, original_question, corrected_answer, confidence_score FROM confident_qa_pairs
         ''')
         
         results = cursor.fetchall()
@@ -374,7 +412,8 @@ class SmartQATracker:
             qa_list.append({
                 'id': row[0],
                 'question': row[1],
-                'answer': row[2]
+                'answer': row[2],
+                'votes' : row[3]
             })
         
         return qa_list
