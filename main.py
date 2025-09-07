@@ -19,7 +19,8 @@ import time
 from qa_rag_pipeline import (
     get_bot_response_with_context, 
     initialize_confident_qa_vector_store,
-    initialize_confluence_qa_data
+    initialize_confluence_qa_data,
+    smart_tracker
 )
 from smart_qa_tracker import SmartQATracker
 
@@ -188,12 +189,17 @@ def get_thread_context(client, channel, thread_ts):
 
                 thread_context.append(f"User: {clean_text}")
             elif bot_id:
-                clean_text = clean_text.replace("Help us get better, please use the following emojis for answer" , " ")
-                clean_text = clean_text.replace(":+1: upvotes" , " ")
-                clean_text = clean_text.replace(":-1: downvotes" , " ")
-                clean_text = clean_text.replace("Disclaimer: If you have more questions related to the same topic please mention me in the thread using", " ")
                 clean_text = re.sub(r'<@[A-Z0-9]+>', '', text).strip()
-                clean_text = clean_text.replace("**", " ")
+                clean_text = clean_text.replace("Help us get better, please use the following emojis for answer: \n\n👍 upvotes \n\n👎 downvotes \n\nDisclaimer: If you have more questions related to the same topic please mention me in the thread using", "")
+                clean_text = clean_text.replace("Help us get better, please use the following emojis for answer" , "")
+                clean_text = clean_text.replace(":+1: upvotes" , "")
+                clean_text = clean_text.replace(":-1: downvotes" , "")
+                clean_text = clean_text.replace("Disclaimer: If you have more questions related to the same topic please mention me in the thread using", "")
+                clean_text = clean_text.replace("**", "")
+                clean_text = clean_text.strip()
+                clean_text = clean_text.replace("\n\n", "")
+                clean_text = clean_text.replace(":", "")
+                print(f"Bot raw text: {clean_text}")
                 if clean_text:
                     thread_context.append(f"Bot: {clean_text}")
         
@@ -469,6 +475,103 @@ def handle_app_mentions(body, say, client):
     except Exception as e:
         print(f"Error handling mention: {str(e)}")
         say("Sorry, I encountered an error.")
+
+
+@bolt_app.event("reaction_added")
+def handle_reaction_added(event, client):
+    reaction = event.get("reaction")
+    
+    # Determine the score change based on the reaction
+    if reaction == "+1":
+        score_change = 1
+    elif reaction == "-1":
+        score_change = -1
+    else:
+        return
+        
+    # Get the timestamp of the message that was reacted to
+    channel_id = event["item"]["channel"]
+    message_ts = event["item"]["ts"]
+    
+    try:
+        # Fetch the thread history. The message reacted to will be at index 0.
+        replies = client.conversations_replies(channel=channel_id, ts=message_ts, inclusive=True)
+        messages = replies.get("messages", [])
+        
+        # Check if the message reacted to is a bot response (it will be at index 0)
+        if messages and messages[0].get("bot_id"):
+            bot_answer = messages[0].get("text", "")
+            
+            # The original user question is the parent message, which is at the start of the thread
+            # We need to find the parent message's text
+            parent_message_ts = messages[0].get("thread_ts")
+            
+            # Now, fetch the parent message using its own timestamp
+            parent_message = client.conversations_history(channel=channel_id, latest=parent_message_ts, inclusive=True, limit=1).get("messages", [])
+            
+            if parent_message:
+                user_question = parent_message[0].get("text", "")
+                
+                # Clean up the text before updating the confidence score
+                clean_question = re.sub(r'<@[A-Z0-9]+>', '', user_question).strip()
+                clean_answer = re.sub(r'<@[A-Z0-9]+>', '', bot_answer).strip()
+                
+                if clean_question and clean_answer:
+                    smart_tracker.update_confidence_score(clean_question, clean_answer, score_change)
+                    print(f"✅ Updated confidence score for '{clean_question}' by {score_change}")
+                else:
+                    print("⚠️ Could not extract clean question or answer.")
+
+    except Exception as e:
+        print(f"❌ Error handling reaction: {e}")
+
+@bolt_app.event("reaction_removed")
+def handle_reaction_removed(event, client):
+    reaction = event.get("reaction")
+    
+    # Determine the score change based on the reaction
+    if reaction == "+1":
+        score_change = -1
+    elif reaction == "-1":
+        score_change = 1
+    else:
+        return
+        
+    # Get the timestamp of the message that was reacted to
+    channel_id = event["item"]["channel"]
+    message_ts = event["item"]["ts"]
+    
+    try:
+        # Fetch the thread history. The message reacted to will be at index 0.
+        replies = client.conversations_replies(channel=channel_id, ts=message_ts, inclusive=True)
+        messages = replies.get("messages", [])
+        
+        # Check if the message reacted to is a bot response (it will be at index 0)
+        if messages and messages[0].get("bot_id"):
+            bot_answer = messages[0].get("text", "")
+            
+            # The original user question is the parent message, which is at the start of the thread
+            # We need to find the parent message's text
+            parent_message_ts = messages[0].get("thread_ts")
+            
+            # Now, fetch the parent message using its own timestamp
+            parent_message = client.conversations_history(channel=channel_id, latest=parent_message_ts, inclusive=True, limit=1).get("messages", [])
+            
+            if parent_message:
+                user_question = parent_message[0].get("text", "")
+                
+                # Clean up the text before updating the confidence score
+                clean_question = re.sub(r'<@[A-Z0-9]+>', '', user_question).strip()
+                clean_answer = re.sub(r'<@[A-Z0-9]+>', '', bot_answer).strip()
+                
+                if clean_question and clean_answer:
+                    smart_tracker.update_confidence_score(clean_question, clean_answer, score_change)
+                    print(f"✅ Updated confidence score for '{clean_question}' by {score_change}")
+                else:
+                    print("⚠️ Could not extract clean question or answer.")
+
+    except Exception as e:
+        print(f"❌ Error handling reaction: {e}")
 
 # ============================================================================
 # FLASK ROUTES

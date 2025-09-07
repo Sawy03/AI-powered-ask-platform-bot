@@ -50,6 +50,7 @@ def format_qa_context(docs) -> str:
         # Extract Q&A from metadata if available
         question = doc.metadata.get('question', '')
         answer = doc.metadata.get('answer', '')
+        confident_score = doc.metadata.get('confidence_score', 1)
         page_title = doc.metadata.get('page_title', 'Unknown Document')
         space_name = doc.metadata.get('space_name', 'Unknown Space')
         print(question)
@@ -70,6 +71,7 @@ def format_qa_context(docs) -> str:
             Document: {page_title} ({space_name})
             Question: {question}
             Answer: {answer}
+            Confidence Score: {confident_score}
             """
         context_parts.append(context_part.strip())
     
@@ -111,9 +113,11 @@ def get_bot_response_with_context(message, thread_context=""):
         
         if confident_docs and len(confident_docs) > 0:
             print(f"✅ Found {len(confident_docs)} confident Q&A pairs")
+            confident_docs.sort(key=lambda doc: doc.metadata.get('confidence_score', 0), reverse=True)
             docs = confident_docs
             context = format_qa_context(docs)
             print("🚀 Using confident database results")
+            print("This is what ollama gets: " + context)
         else:
             # Step 2: If no confident results, try confluence database
             print("🔍 No confident results found, searching confluence database...")

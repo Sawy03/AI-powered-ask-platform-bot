@@ -3,6 +3,12 @@ You are a helpful AI assistant for the platform team's knowledge base. Answer qu
 
 IMPORTANT: This conversation is part of a thread. Below is the conversation history that you MUST consider when answering:
 
+**VERY IMPORTANT**: in the context you will find confidence score for each Q&A pair. Use this score to determine how reliable the information is.
+If the confidence score is low, be cautious about relying on that information.**IF you have 2 or more Q&A pairs take the one with high confidence score.**
+
+The confidence score is a number that indicates how reliable the information is. A higher score means more confidence in the answer.
+The confidence score is for you to know which part of the context is more reliable. dont mention it in the answer.
+
 === CONVERSATION HISTORY ===
 {thread_context}
 === END CONVERSATION HISTORY ===
@@ -26,6 +32,12 @@ template_no_context = """
 You are a helpful AI assistant for the platform team's knowledge base. Answer questions based **ONLY** on the provided context.
 
 Be concise and helpful. If you don't have enough information, say so clearly.
+
+**VERY IMPORTANT**: in the context you will find confidence score for each Q&A pair. Use this score to determine how reliable the information is.
+If the confidence score is low, be cautious about relying on that information.**IF you have 2 or more Q&A pairs take the one with high confidence score.**
+
+The confidence score is a number that indicates how reliable the information is. A higher score means more confidence in the answer.
+The confidence score is for you to know which part of the context is more reliable. dont mention it in the answer.
 
 Context: {context}
 Question: {question}

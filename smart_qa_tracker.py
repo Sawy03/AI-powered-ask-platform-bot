@@ -89,7 +89,6 @@ class SmartQATracker:
             )
         ''')
         
-        # New table for confident Q&A pairs
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS confident_qa_pairs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,14 +174,14 @@ class SmartQATracker:
         conn = sqlite3.connect(self.tracking_db)
         cursor = conn.cursor()
         
-        cursor.execute('SELECT id, original_question, corrected_answer FROM confident_qa_pairs')
+        cursor.execute('SELECT id, original_question, corrected_answer, confidence_score FROM confident_qa_pairs')
         results = cursor.fetchall()
         conn.close()
         
         successful_syncs = 0
         skipped_syncs = 0
         
-        for qa_id, question, answer in results:
+        for qa_id, question, answer, score in results:
             # Validate data before adding
             if not question or not answer or not str(question).strip() or not str(answer).strip():
                 print(f"⚠️ Skipping Q&A pair {qa_id} - missing or empty question/answer")
@@ -195,7 +194,7 @@ class SmartQATracker:
             
                 
             try:
-                self._add_confident_qa_to_vector_store(qa_id, clean_question, clean_answer)
+                self._add_confident_qa_to_vector_store(qa_id, clean_question, clean_answer, score)
                 successful_syncs += 1
             except Exception as e:
                 print(f"❌ Failed to add Q&A pair {qa_id}: {e}")
@@ -206,7 +205,7 @@ class SmartQATracker:
             print(f"⚠️ Skipped {skipped_syncs} invalid Q&A pairs")
 
 
-    def _add_confident_qa_to_vector_store(self, qa_id: int, question: str, answer: str):
+    def _add_confident_qa_to_vector_store(self, qa_id: int, question: str, answer: str, score: int):
         """Add confident Q&A pair to vector store with comprehensive validation"""
         try:
             # Validate inputs thoroughly
@@ -235,6 +234,7 @@ class SmartQATracker:
                 'question': question_str,
                 'answer': answer_str,
                 'qa_id': int(qa_id),
+                'confidence_score': int(score),
                 'type': 'confident_qa'
             }
             
@@ -365,7 +365,7 @@ class SmartQATracker:
         if result:
             # Question exists, update confidence score and answer
             qa_id = result[0]
-            new_score = result[1] + 1
+            new_score = int(result[1]) + 1
             cursor.execute('''
                 UPDATE confident_qa_pairs 
                 SET corrected_answer = ?, confidence_score = ?, timestamp = ? 
@@ -384,8 +384,11 @@ class SmartQATracker:
         conn.commit()
         conn.close()
         
+        # i want to force the new_score to be integer
+        new_score = int(result[1]) + 1 if result else 1
+        print(f"New confidence score: {new_score}")
         # Add to vector store with validated data
-        self._add_confident_qa_to_vector_store(qa_id, original_question, corrected_answer)
+        self._add_confident_qa_to_vector_store(qa_id, original_question, corrected_answer, new_score)
         print("\n1. Cleaning database of invalid entries...")
         self.clean_confident_database()
 
@@ -513,9 +516,9 @@ class SmartQATracker:
             )
             
             # Re-add all current pairs to vector store
-            for qa_id, question, answer in current_pairs:
-                self._add_confident_qa_to_vector_store(qa_id, question, answer)
-            
+            for qa_id, question, answer, confidence_score in current_pairs:
+                self._add_confident_qa_to_vector_store(qa_id, question, answer, confidence_score)
+
             print(f"✅ Vector store cleaned up with {len(current_pairs)} current Q&A pairs")
             
         except Exception as e:
@@ -604,6 +607,50 @@ class SmartQATracker:
             # For now, we'll handle this by regenerating the entire vector store periodically
         
         return len(vector_doc_ids)
+    
+    # In smart_qa_tracker.py
+
+    def update_confidence_score(self, question: str, answer: str, score_change: int):
+        """
+        Updates the confidence score for a Q&A pair.
+        If the pair doesn't exist, it creates it.
+        """
+        # implementation using SQLite connection similar to save_confident_answer
+        conn = sqlite3.connect(self.tracking_db)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT id, confidence_score FROM confident_qa_pairs WHERE original_question = ?', (question,))
+        result = cursor.fetchone()
+
+        if result:
+            qa_id, current_score = result
+            new_score = current_score + score_change
+            cursor.execute('''
+                UPDATE confident_qa_pairs 
+                SET confidence_score = ? 
+                WHERE id = ?
+            ''', (new_score, qa_id))
+        else:
+            # Insert a new record if it doesn't exist
+            answer = answer.replace("Help us get better, please use the following emojis for answer: \n\n👍 upvotes \n\n👎 downvotes \n\nDisclaimer: If you have more questions related to the same topic please mention me in the thread using", "")
+            answer = answer.replace("Help us get better, please use the following emojis for answer" , "")
+            answer = answer.replace(":+1: upvotes" , "")
+            answer = answer.replace(":-1: downvotes" , "")
+            answer = answer.replace("Disclaimer: If you have more questions related to the same topic please mention me in the thread using", "")
+            answer = answer.replace("**", "")
+            answer = answer.strip()
+            answer = answer.replace("\n\n", "")
+            answer = answer.replace(":", "")
+            cursor.execute('''
+                INSERT INTO confident_qa_pairs (original_question, corrected_answer, confidence_score, timestamp)
+                VALUES (?, ?, ?, ?)
+            ''', (question, answer, score_change, datetime.now().isoformat()))
+
+        conn.commit()
+        conn.close()
+        
+        # Recreate the vector store to sync the change
+        self.recreate_confident_vector_store()
     
 
     def record_qa_pairs(self, page_id: str, qa_pairs: List[Tuple[str, str]], vector_doc_ids: List[str]):
