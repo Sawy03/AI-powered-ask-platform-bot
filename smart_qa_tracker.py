@@ -1,6 +1,7 @@
 from ast import pattern
 import os
 import json
+from flask.cli import load_dotenv
 import requests
 from requests.auth import HTTPBasicAuth
 from langchain_core.documents import Document
@@ -13,6 +14,8 @@ import re
 from typing import List, Dict, Optional, Tuple
 import sqlite3
 from prompts import prompt
+load_dotenv()
+
 
 class SmartQATracker:
     def __init__(self, 
@@ -31,7 +34,9 @@ class SmartQATracker:
         self.session.auth = HTTPBasicAuth(username, api_token)
         
         # Initialize vector store
-        self.embeddings = OllamaEmbeddings(model="mxbai-embed-large")
+        # self.embeddings = OllamaEmbeddings(model="mxbai-embed-large")
+        self.embeddings = OllamaEmbeddings(model=os.getenv("EMBEDDINGS_MODEL"), base_url=os.getenv("EMBEDDINGS_BASE_URL"))
+
         self.db_location = "./chroma_confluence_qa_db"
         self.vector_store = Chroma(
             collection_name="confluence_qa_smart",
@@ -48,7 +53,12 @@ class SmartQATracker:
         )
         
         # Initialize LLM for Q&A generation
-        self.llm = OllamaLLM(model="llama3.2:1b")
+        # self.llm = OllamaLLM(model="llama3.2:1b")
+        self.llm = OllamaLLM(
+            model=os.getenv("LLM_MODEL"),
+            base_url=os.getenv("LLM_BASE_URL"),
+            timeout=3000
+        )
         
         # Initialize tracking database
         self.tracking_db = "./page_tracking.db"

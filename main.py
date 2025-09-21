@@ -261,44 +261,6 @@ def get_parent_message(client, channel, thread_ts):
 # ============================================================================
 # SLACK EVENT HANDLERS
 # ============================================================================
-# @bolt_app.command("/correction")
-# def handle_correction_command(ack, body, say, client):
-#     ack()
-    
-#     try:
-#         user_id = body["user_id"]
-#         channel_id = body["channel_id"]
-#         thread_ts = body.get("thread_ts")
-#         command_text = body.get("text", "")
-
-#         print(f"Received /correction command from user {user_id} in channel {channel_id}")
-#         print(f"Command text: {command_text}")
-
-#         if not thread_ts:
-#             say(f"<@{user_id}> The `/correction` command must be used as a reply in a thread.", channel=channel_id)
-#             return
-
-#         # Fetch the parent message of the thread
-#         parent_message = get_parent_message(client, channel_id, thread_ts)
-        
-#         # Clean up the parent message to remove any bot mentions
-#         clean_parent_message = re.sub(r'<@[A-Z0-9]+>', '', parent_message).strip()
-
-#         if not clean_parent_message:
-#             say(f"<@{user_id}> Could not find the original question to correct.", thread_ts=thread_ts)
-#             return
-
-#         # The command_text is the new, corrected answer
-#         if command_text:
-#             print(f"Sending correction for '{clean_parent_message}' with new answer '{command_text}'")
-#             smart_tracker.save_confident_answer(clean_parent_message, command_text)
-#             say(text=f"<@{user_id}> Got it! This question and correction have been submitted to the knowledge base.", thread_ts=thread_ts)
-#         else:
-#             say(text=f"<@{user_id}> Please provide the correct answer after the `/correction` command. E.g., `/correction The correct answer is...`", thread_ts=thread_ts)
-
-#     except Exception as e:
-#         print(f"❌ Error handling /correction command: {str(e)}")
-#         say("Sorry, I encountered an error while processing your correction.", thread_ts=thread_ts)
 
 # Slash command handler
 @bolt_app.command("/correction")
@@ -341,8 +303,6 @@ def handle_correction_command(ack, body, say, client):
         thread_ts=thread_ts  # reply in same thread
     )
 
-
-
 # Respond to private messages
 @bolt_app.event("message")
 def handle_message_events(body, say, client):
@@ -366,7 +326,7 @@ def handle_message_events(body, say, client):
         print(f"✅ Processing message: {text}")
         if text.__contains__("<@U099VBD9BR7>"):
             return
-        if text.lower().split(" ").__contains__("hello") or text.lower().split(" ").__contains__("hi"):
+        if text.lower().split(" ").__contains__("hello") or text.lower().split(" ").__contains__("hi") and len(text.split(" ")) < 3:
             reply_thread_ts = thread_ts or message_ts
             say(text="Hi there! 👋 Ask me anything about the platform knowledge base!", 
                 thread_ts=reply_thread_ts)
@@ -392,13 +352,14 @@ def handle_message_events(body, say, client):
         else:
             print("🔍 Getting RAG response...")
             thread_context = ""
+            response = "Hi there! \n\n"
             if thread_ts:
                 print("🧵 Message is in a thread, getting context...")
                 thread_context = get_thread_context(client, channel, thread_ts)
             if thread_context:
-                response = get_bot_response_with_context(text, thread_context)
+                response = response + get_bot_response_with_context(text, thread_context)
             else:
-                response = get_bot_response_with_context(text, "")
+                response = response + get_bot_response_with_context(text, "")
             response = response.replace("**", "")
             say(text=response, thread_ts=message_ts)
     except Exception as e:
@@ -415,12 +376,6 @@ def handle_app_mentions(body, say, client):
         channel = event.get("channel", "")
         message_ts = event.get("ts", "")
         thread_ts = event.get("thread_ts")
-
-        # print(f"APP MENTION EVENT: {event}")
-        # print(f"Mention text: {text}")
-        # print(f"User: {user}")
-        # print(f"Message timestamp: {message_ts}")
-        # print(f"Thread timestamp: {thread_ts}")
         
         # Remove bot mention from text
         clean_text = re.sub(r'<@[A-Z0-9]+>', '', text).strip()

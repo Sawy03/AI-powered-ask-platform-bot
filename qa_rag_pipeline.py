@@ -31,7 +31,13 @@ confident_retrieval = smart_tracker.get_confident_retriever(
 
 
 # Initialize model
-model = OllamaLLM(model="llama3.2:1b")
+# model = OllamaLLM(model="llama3.2:1b")
+model = OllamaLLM(
+    model=os.getenv("LLM_MODEL"),
+    base_url=os.getenv("LLM_BASE_URL"),
+    timeout=3000
+)
+
 
 
 prompt_with_context = ChatPromptTemplate.from_template(template_with_context)
