@@ -64,6 +64,12 @@ The project is designed to support integration with platforms like **Slack** and
    CONFLUENCE_BASE_URL=your_base_url_here
    CONFLUENCE_USERNAME=your_username_here
    CONFLUENCE_API_TOKEN=your_api_key_here
+
+   # LLM Configuration
+   EMBEDDINGS_MODEL=your_embeddings_model_name_here
+   EMBEDDINGS_BASE_URL=your_embeddings_model_url_here //if you are hosting it somewhere
+   LLM_MODEL=your_llm_model_name_here
+   LLM_BASE_URL=your_llm_model_url_here //if you are hosting it somewhere
    
    CONFLUENCE_SPACE_KEYS=your_space_name_here
    PORT=your_port_here
